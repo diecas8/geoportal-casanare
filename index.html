@@ -4,8 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Geoportal Predios PFNM, Casanare</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script> <!-- SheetJS para exportación a Excel -->
     <style>
         body {
@@ -36,24 +37,6 @@
         #info {
             border-top: 1px solid #ddd;
             padding-top: 10px;
-        }
-        .legend {
-            background: white;
-            padding: 10px;
-            line-height: 18px;
-            color: #333;
-            border-radius: 5px;
-            position: absolute;
-            bottom: 20px;
-            left: 10px;
-            z-index: 1000;
-        }
-        .legend i {
-            width: 18px;
-            height: 18px;
-            float: left;
-            margin-right: 8px;
-            opacity: 0.7;
         }
         #search, #opacityControl {
             margin-bottom: 15px;
@@ -114,12 +97,12 @@
         L.control.layers(baseMaps).addTo(map);
 
         // URL del archivo GeoJSON
-       var geoJsonUrl1 = 'fincasssss.geojson';
+        var geoJsonUrl1 = 'fincasssss.geojson';
 
         // Variables para almacenar datos y ubicación
         var geojsonLayer, searchMarker;
         var savedLocations = [];
-        var userMarker; // Variable para almacenar el marcador de la ubicación del usuario
+        var userMarker;
 
         // Estilo de los polígonos
         function stylePredios(feature) {
@@ -135,7 +118,7 @@
         function showFeatureInfo(feature) {
             var infoContent = "<strong>Detalles del Predio:</strong><br>";
             for (let property in feature.properties) {
-                infoContent += <strong>${property}:</strong> ${feature.properties[property]}<br>;
+                infoContent += `<strong>${property}:</strong> ${feature.properties[property]}<br>`;
             }
             document.getElementById('info').innerHTML = infoContent;
         }
@@ -147,18 +130,18 @@
                     showFeatureInfo(feature);
                 }
             });
-            layer.bindPopup(
+            layer.bindPopup(`
                 <strong>Predio:</strong> ${feature.properties.nom_finca || 'No disponible'}<br>
                 <strong>Código Finca:</strong> ${feature.properties.cod_finca || 'No disponible'}<br>
                 <strong>Propietario:</strong> ${feature.properties.propietario || 'No disponible'}
-            );
+            `);
         }
 
         // Cargar y agregar el archivo GeoJSON con manejo de errores
         fetch(geoJsonUrl1)
             .then(response => {
                 if (!response.ok) {
-                    throw new Error(Error al cargar el archivo GeoJSON: ${response.statusText});
+                    throw new Error(`Error al cargar el archivo GeoJSON: ${response.statusText}`);
                 }
                 return response.json();
             })
@@ -224,7 +207,7 @@
 
                     L.marker([lat, lng], { icon: L.divIcon({ className: 'fas fa-map-marker-alt', html: '<i class="fas fa-map-marker-alt" style="color: green;"></i>' }) })
                         .addTo(map)
-                        .bindPopup(<strong>Finca:</strong> ${finca}<br><strong>Propietario:</strong> ${propietario}<br><strong>Coordenadas:</strong> ${lat}, ${lng});
+                        .bindPopup(`<strong>Finca:</strong> ${finca}<br><strong>Propietario:</strong> ${propietario}<br><strong>Coordenadas:</strong> ${lat}, ${lng}`);
 
                     updateSavedLocations();
                 }
@@ -233,8 +216,8 @@
 
         // Mostrar ubicaciones guardadas en el sidebar
         function updateSavedLocations() {
-            var list = savedLocations.map(loc => <li><strong>Finca:</strong> ${loc.finca} - <strong>Propietario:</strong> ${loc.propietario} - (${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)})</li>).join('');
-            document.getElementById('savedLocations').innerHTML = <ul>${list}</ul>;
+            var list = savedLocations.map(loc => `<li><strong>Finca:</strong> ${loc.finca} - <strong>Propietario:</strong> ${loc.propietario} - (${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)})</li>`).join('');
+            document.getElementById('savedLocations').innerHTML = `<ul>${list}</ul>`;
         }
 
         // Exportar ubicaciones a Excel
@@ -276,11 +259,9 @@
                         var lat = position.coords.latitude;
                         var lng = position.coords.longitude;
 
-                        // Si el marcador ya existe, actualizar su posición
                         if (userMarker) {
                             userMarker.setLatLng([lat, lng]);
                         } else {
-                            // Crear el marcador de usuario si no existe
                             userMarker = L.marker([lat, lng], {
                                 icon: L.divIcon({
                                     html: '<i class="fas fa-user-circle" style="color: red; font-size: 24px;"></i>',
