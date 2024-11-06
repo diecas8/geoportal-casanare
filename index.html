@@ -92,59 +92,31 @@
         L.control.layers(baseMaps).addTo(map);
         console.log("Capas base añadidas.");
 
-        // GeoJSON integrado para prueba
-        var geoJsonData = {
-            "type": "FeatureCollection",
-            "features": [
-                {
-                    "type": "Feature",
-                    "properties": {
-                        "cod_finca": "ME-P-01",
-                        "nom_finca": "Finca Ejemplo 1",
-                        "propietario": "Propietario 1"
-                    },
-                    "geometry": {
-                        "type": "Polygon",
-                        "coordinates": [
-                            [
-                                [-72.3945, 5.3895],
-                                [-72.3935, 5.3895],
-                                [-72.3935, 5.3885],
-                                [-72.3945, 5.3885],
-                                [-72.3945, 5.3895]
-                            ]
-                        ]
-                    }
-                },
-                {
-                    "type": "Feature",
-                    "properties": {
-                        "cod_finca": "ME-P-02",
-                        "nom_finca": "Finca Ejemplo 2",
-                        "propietario": "Propietario 2"
-                    },
-                    "geometry": {
-                        "type": "Polygon",
-                        "coordinates": [
-                            [
-                                [-72.3965, 5.3920],
-                                [-72.3955, 5.3920],
-                                [-72.3955, 5.3910],
-                                [-72.3965, 5.3910],
-                                [-72.3965, 5.3920]
-                            ]
-                        ]
-                    }
-                }
-            ]
-        };
+        // URL del archivo GeoJSON - Asegúrate de reemplazarla con la URL completa de GitHub Pages
+        var geoJsonUrl = 'https://diecas8.github.io/geportal-casanare/fincasssss.geojson';
 
-        // Añadir GeoJSON al mapa
-        var geojsonLayer = L.geoJSON(geoJsonData, {
-            onEachFeature: onEachFeature,
-            style: { color: "#ff7800", weight: 2, opacity: 0.8, fillOpacity: 0.4 }
-        }).addTo(map);
-        console.log("GeoJSON de prueba cargado correctamente.");
+        // Variables globales
+        var geojsonLayer, searchMarker;
+
+        // Intentar cargar el archivo GeoJSON
+        fetch(geoJsonUrl)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error("No se pudo cargar el archivo GeoJSON.");
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log("Archivo GeoJSON cargado correctamente.");
+                geojsonLayer = L.geoJSON(data, {
+                    onEachFeature: onEachFeature,
+                    style: { color: "#ff7800", weight: 2, opacity: 0.8, fillOpacity: 0.4 }
+                }).addTo(map);
+            })
+            .catch(error => {
+                console.error("Error al cargar el archivo GeoJSON:", error);
+                alert("Error al cargar el archivo GeoJSON. Verifique la URL o el servidor.");
+            });
 
         // Función para buscar predios por código de finca
         function searchFinca() {
