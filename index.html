@@ -6,9 +6,9 @@
     <title>Geoportal Predios PFNM, Casanare</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script> <!-- Librería para exportación a Excel -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script> <!-- Librería para guardar archivos -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.4.1/leaflet.markercluster.js"></script> <!-- Clustering de marcadores -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.4.1/leaflet.markercluster.js"></script> <!-- Clustering de Marcadores -->
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -89,10 +89,7 @@
         var baseMaps = { "OSM": osm, "Satelital": satelite, "Blanco y Negro": blancoNegro };
         L.control.layers(baseMaps).addTo(map);
 
-        // URL del archivo GeoJSON
         var geoJsonUrl1 = 'fincasssss.geojson';
-
-        // Variables para almacenamiento y clustering
         var geojsonLayer, searchMarker, userMarker;
         var savedLocations = [];
         var favorites = [];
@@ -117,4 +114,71 @@
             });
             layer.bindPopup(`
                 <strong>Predio:</strong> ${feature.properties.nom_finca || 'No disponible'}<br>
-                <strong>Código Finca:</strong> ${feature.properties.cod_finca ||
+                <strong>Código Finca:</strong> ${feature.properties.cod_finca || 'No disponible'}<br>
+                <strong>Propietario:</strong> ${feature.properties.propietario || 'No disponible'}
+            `);
+            markersCluster.addLayer(layer); // Añadir al cluster
+        }
+
+        // Cargar GeoJSON
+        fetch(geoJsonUrl1)
+            .then(response => response.json())
+            .then(data => {
+                geojsonLayer = L.geoJSON(data, { onEachFeature: onEachFeature }).addTo(markersCluster);
+                map.addLayer(markersCluster);
+            });
+
+        // Función para añadir predio a favoritos
+        function addToFavorites(codFinca) {
+            var feature = geojsonLayer.getLayers().find(layer => layer.feature.properties.cod_finca === codFinca);
+            if (feature && !favorites.includes(codFinca)) {
+                favorites.push(codFinca);
+                updateFavoritesList();
+                alert("Predio añadido a favoritos.");
+            }
+        }
+
+        function updateFavoritesList() {
+            var list = favorites.map(codFinca => `<li>${codFinca}</li>`).join('');
+            document.getElementById('favoritesList').innerHTML = `<ul>${list}</ul>`;
+        }
+
+        // Exportar ubicaciones guardadas a CSV
+        function exportToCSV() {
+            var csvContent = "data:text/csv;charset=utf-8,";
+            csvContent += "Nombre de la Finca,Propietario,Latitud,Longitud\n";
+            savedLocations.forEach(loc => {
+                csvContent += `${loc.finca},${loc.propietario},${loc.lat},${loc.lng}\n`;
+            });
+            var encodedUri = encodeURI(csvContent);
+            var link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "Ubicaciones_Guardadas.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Medición de áreas en el mapa
+        L.control.scale().addTo(map); // Añade una escala para referencia
+
+        // Guardar ubicación actual
+        function saveCurrentLocation() {
+            navigator.geolocation.getCurrentPosition(position => {
+                var lat = position.coords.latitude;
+                var lng = position.coords.longitude;
+                var finca = prompt("Nombre de la finca:");
+                var propietario = prompt("Nombre del propietario:");
+                savedLocations.push({ finca, propietario, lat, lng });
+                updateSavedLocations();
+            });
+        }
+
+        // Actualizar lista de ubicaciones guardadas
+        function updateSavedLocations() {
+            var list = savedLocations.map(loc => `<li><strong>Finca:</strong> ${loc.finca} - <strong>Propietario:</strong> ${loc.propietario} - (${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)})</li>`).join('');
+            document.getElementById('savedLocations').innerHTML = `<ul>${list}</ul>`;
+        }
+    </script>
+</body>
+</html>
