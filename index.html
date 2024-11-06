@@ -1,184 +1,96 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Geoportal Predios PFNM, Casanare</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.4.1/leaflet.markercluster.js"></script> <!-- Clustering de Marcadores -->
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            display: flex;
-        }
-        #map {
-            height: 100vh;
-            width: 75%;
-        }
-        #sidebar {
-            width: 25%;
-            padding: 15px;
-            background-color: #f7f7f7;
-            overflow-y: auto;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
-        }
-        #sidebar h2 {
-            font-size: 18px;
-            margin-bottom: 10px;
-        }
-        #info, #distance, #savedLocations, #favoritesList {
-            font-size: 14px;
-            color: #333;
-            margin-top: 15px;
-        }
-        #instructions {
-            font-size: 12px;
-            color: #666;
-            margin-top: 15px;
-            border-top: 1px solid #ddd;
-            padding-top: 10px;
-        }
-    </style>
-</head>
-<body>
-    <div id="map"></div>
-    <div id="sidebar">
-        <h2>Información del Predio</h2>
-        <div id="search">
-            <input type="text" id="searchField" placeholder="Buscar por Código de Finca (cod_finca)" />
-            <button onclick="searchFinca()">Buscar</button>
-            <button id="resetViewButton" onclick="resetView()">Vista General</button>
-        </div>
-        <div id="opacityControl">
-            <label for="opacitySlider">Opacidad de Polígonos:</label>
-            <input type="range" id="opacitySlider" min="0" max="1" step="0.1" value="0.4" oninput="updateOpacity(this.value)">
-        </div>
-        <div id="distance"><strong>Distancia recorrida:</strong> 0 metros</div>
-        <button id="saveLocationButton" onclick="saveCurrentLocation()">Guardar Ubicación Actual</button>
-        <button id="exportButton" onclick="exportToCSV()">Exportar a CSV</button>
-        <div id="info">Selecciona un predio en el mapa para ver más detalles aquí.</div>
-        <h3>Ubicaciones Guardadas</h3>
-        <div id="savedLocations">No hay ubicaciones guardadas aún.</div>
-        <h3>Favoritos</h3>
-        <div id="favoritesList">No hay favoritos aún.</div>
-        <div id="instructions">
-            <strong>Instrucciones:</strong>
-            <ul>
-                <li>Busca un predio por código de finca.</li>
-                <li>Ajusta la opacidad de los polígonos.</li>
-                <li>Guarda tu ubicación actual y favoritos.</li>
-                <li>Exporta datos a un archivo CSV.</li>
-                <li>Haz clic en un predio para ver detalles y añadir a favoritos.</li>
-            </ul>
-        </div>
-    </div>
+<script>
+    // Mapa inicial
+    var map = L.map('map').setView([5.3895, -72.3945], 7);
 
-    <script>
-        var map = L.map('map').setView([5.3895, -72.3945], 7);
+    // Crear capas base
+    var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
 
-        // Crear capas base y añadir control de capas
-        var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(map);
-        var satelite = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png');
-        var blancoNegro = L.tileLayer('https://tiles.wmflabs.org/bw-mapnik/{z}/{x}/{y}.png');
-        var baseMaps = { "OSM": osm, "Satelital": satelite, "Blanco y Negro": blancoNegro };
-        L.control.layers(baseMaps).addTo(map);
+    var satelite = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png');
+    var blancoNegro = L.tileLayer('https://tiles.wmflabs.org/bw-mapnik/{z}/{x}/{y}.png');
 
-        var geoJsonUrl1 = 'fincasssss.geojson';
-        var geojsonLayer, searchMarker, userMarker;
-        var savedLocations = [];
-        var favorites = [];
-        var markersCluster = L.markerClusterGroup(); // Grupo de marcadores para clustering
+    var baseMaps = { "OSM": osm, "Satelital": satelite, "Blanco y Negro": blancoNegro };
+    L.control.layers(baseMaps).addTo(map);
 
-        // Función para mostrar información del predio
-        function showFeatureInfo(feature) {
-            var infoContent = `<strong>Detalles del Predio:</strong><br>`;
-            for (let property in feature.properties) {
-                infoContent += `<strong>${property}:</strong> ${feature.properties[property]}<br>`;
+    // URL del archivo GeoJSON
+    var geoJsonUrl1 = 'fincasssss.geojson';
+
+    // Variables globales
+    var geojsonLayer, searchMarker;
+
+    // Cargar archivo GeoJSON y añadirlo al mapa
+    fetch(geoJsonUrl1)
+        .then(response => response.json())
+        .then(data => {
+            geojsonLayer = L.geoJSON(data, {
+                onEachFeature: onEachFeature,
+                style: { color: "#ff7800", weight: 2, opacity: 0.8, fillOpacity: 0.4 }
+            }).addTo(map);
+        })
+        .catch(error => console.error("Error al cargar el archivo GeoJSON:", error));
+
+    // Función para buscar predios por código de finca
+    function searchFinca() {
+        var codFinca = document.getElementById('searchField').value.trim();
+        if (!codFinca) {
+            alert("Ingrese un código de finca.");
+            return;
+        }
+
+        var found = false;
+        geojsonLayer.eachLayer(function(layer) {
+            if (layer.feature.properties.cod_finca === codFinca) {
+                // Eliminar marcador de búsqueda anterior
+                if (searchMarker) map.removeLayer(searchMarker);
+
+                // Añadir un marcador en el centro del predio encontrado
+                searchMarker = L.marker(layer.getBounds().getCenter(), {
+                    icon: L.divIcon({
+                        html: '<i class="fas fa-map-marker-alt" style="color: blue; font-size: 24px;"></i>',
+                        className: 'custom-marker',
+                        iconSize: [30, 42],
+                        iconAnchor: [15, 42]
+                    })
+                }).addTo(map).bindPopup("Resultado de búsqueda").openPopup();
+
+                // Centrar el mapa en el predio encontrado y abrir su popup
+                map.setView(layer.getBounds().getCenter(), 16);
+                layer.openPopup();
+                showFeatureInfo(layer.feature);
+                found = true;
             }
-            infoContent += `<button onclick="addToFavorites('${feature.properties.cod_finca}')">Añadir a Favoritos</button>`;
-            document.getElementById('info').innerHTML = infoContent;
+        });
+        if (!found) alert("No se encontró ningún predio con el código especificado.");
+    }
+
+    // Función para restablecer la vista inicial del mapa
+    function resetView() {
+        map.setView([5.3895, -72.3945], 7);
+        if (searchMarker) map.removeLayer(searchMarker);
+        document.getElementById('info').innerHTML = "Selecciona un predio en el mapa para ver detalles.";
+    }
+
+    // Función para mostrar la información de un predio en el sidebar
+    function showFeatureInfo(feature) {
+        var infoContent = `<strong>Detalles del Predio:</strong><br>`;
+        for (let property in feature.properties) {
+            infoContent += `<strong>${property}:</strong> ${feature.properties[property]}<br>`;
         }
+        document.getElementById('info').innerHTML = infoContent;
+    }
 
-        // Manejo de cada predio y evento de clic
-        function onEachFeature(feature, layer) {
-            layer.on({
-                click: function () {
-                    showFeatureInfo(feature);
-                }
-            });
-            layer.bindPopup(`
-                <strong>Predio:</strong> ${feature.properties.nom_finca || 'No disponible'}<br>
-                <strong>Código Finca:</strong> ${feature.properties.cod_finca || 'No disponible'}<br>
-                <strong>Propietario:</strong> ${feature.properties.propietario || 'No disponible'}
-            `);
-            markersCluster.addLayer(layer); // Añadir al cluster
-        }
-
-        // Cargar GeoJSON
-        fetch(geoJsonUrl1)
-            .then(response => response.json())
-            .then(data => {
-                geojsonLayer = L.geoJSON(data, { onEachFeature: onEachFeature }).addTo(markersCluster);
-                map.addLayer(markersCluster);
-            });
-
-        // Función para añadir predio a favoritos
-        function addToFavorites(codFinca) {
-            var feature = geojsonLayer.getLayers().find(layer => layer.feature.properties.cod_finca === codFinca);
-            if (feature && !favorites.includes(codFinca)) {
-                favorites.push(codFinca);
-                updateFavoritesList();
-                alert("Predio añadido a favoritos.");
+    // Manejo de cada predio en el GeoJSON y evento de clic para mostrar detalles
+    function onEachFeature(feature, layer) {
+        layer.on({
+            click: function () {
+                showFeatureInfo(feature);
             }
-        }
-
-        function updateFavoritesList() {
-            var list = favorites.map(codFinca => `<li>${codFinca}</li>`).join('');
-            document.getElementById('favoritesList').innerHTML = `<ul>${list}</ul>`;
-        }
-
-        // Exportar ubicaciones guardadas a CSV
-        function exportToCSV() {
-            var csvContent = "data:text/csv;charset=utf-8,";
-            csvContent += "Nombre de la Finca,Propietario,Latitud,Longitud\n";
-            savedLocations.forEach(loc => {
-                csvContent += `${loc.finca},${loc.propietario},${loc.lat},${loc.lng}\n`;
-            });
-            var encodedUri = encodeURI(csvContent);
-            var link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", "Ubicaciones_Guardadas.csv");
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-
-        // Medición de áreas en el mapa
-        L.control.scale().addTo(map); // Añade una escala para referencia
-
-        // Guardar ubicación actual
-        function saveCurrentLocation() {
-            navigator.geolocation.getCurrentPosition(position => {
-                var lat = position.coords.latitude;
-                var lng = position.coords.longitude;
-                var finca = prompt("Nombre de la finca:");
-                var propietario = prompt("Nombre del propietario:");
-                savedLocations.push({ finca, propietario, lat, lng });
-                updateSavedLocations();
-            });
-        }
-
-        // Actualizar lista de ubicaciones guardadas
-        function updateSavedLocations() {
-            var list = savedLocations.map(loc => `<li><strong>Finca:</strong> ${loc.finca} - <strong>Propietario:</strong> ${loc.propietario} - (${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)})</li>`).join('');
-            document.getElementById('savedLocations').innerHTML = `<ul>${list}</ul>`;
-        }
-    </script>
-</body>
-</html>
+        });
+        layer.bindPopup(`
+            <strong>Predio:</strong> ${feature.properties.nom_finca || 'No disponible'}<br>
+            <strong>Código Finca:</strong> ${feature.properties.cod_finca || 'No disponible'}<br>
+            <strong>Propietario:</strong> ${feature.properties.propietario || 'No disponible'}
+        `);
+    }
+</script>
