@@ -6,9 +6,7 @@
     <title>Geoportal Predios PFNM, Casanare</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.4.1/leaflet.markercluster.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script> <!-- SheetJS para exportación a Excel -->
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -30,17 +28,47 @@
             font-size: 18px;
             margin-bottom: 10px;
         }
-        #info, #distance, #savedLocations, #favoritesList {
+        #info, #distance, #savedLocations {
             font-size: 14px;
             color: #333;
             margin-top: 15px;
         }
-        #instructions {
-            font-size: 12px;
-            color: #666;
-            margin-top: 15px;
+        #info {
             border-top: 1px solid #ddd;
             padding-top: 10px;
+        }
+        .legend {
+            background: white;
+            padding: 10px;
+            line-height: 18px;
+            color: #333;
+            border-radius: 5px;
+            position: absolute;
+            bottom: 20px;
+            left: 10px;
+            z-index: 1000;
+        }
+        .legend i {
+            width: 18px;
+            height: 18px;
+            float: left;
+            margin-right: 8px;
+            opacity: 0.7;
+        }
+        #search, #opacityControl {
+            margin-bottom: 15px;
+        }
+        #search input {
+            width: calc(100% - 20px);
+            padding: 5px;
+            font-size: 14px;
+        }
+        #search button, #resetViewButton, #opacitySlider, #saveLocationButton, #exportButton {
+            width: 100%;
+            padding: 5px;
+            font-size: 14px;
+            margin-top: 5px;
+            cursor: pointer;
         }
     </style>
 </head>
@@ -59,72 +87,97 @@
         </div>
         <div id="distance"><strong>Distancia recorrida:</strong> 0 metros</div>
         <button id="saveLocationButton" onclick="saveCurrentLocation()">Guardar Ubicación Actual</button>
-        <button id="exportButton" onclick="exportToCSV()">Exportar a CSV</button>
+        <button id="exportButton" onclick="exportToExcel()">Exportar a Excel</button>
         <div id="info">Selecciona un predio en el mapa para ver más detalles aquí.</div>
         <h3>Ubicaciones Guardadas</h3>
         <div id="savedLocations">No hay ubicaciones guardadas aún.</div>
-        <h3>Favoritos</h3>
-        <div id="favoritesList">No hay favoritos aún.</div>
-        <div id="instructions">
-            <strong>Instrucciones:</strong>
-            <ul>
-                <li>Busca un predio por código de finca.</li>
-                <li>Ajusta la opacidad de los polígonos.</li>
-                <li>Guarda tu ubicación actual y favoritos.</li>
-                <li>Exporta datos a un archivo CSV.</li>
-                <li>Haz clic en un predio para ver detalles y añadir a favoritos.</li>
-            </ul>
-        </div>
     </div>
 
     <script>
-        // Inicializar el mapa y establecer vista inicial
         var map = L.map('map').setView([5.3895, -72.3945], 7);
-        console.log("Mapa inicializado.");
 
-        // Crear capas base y añadir control de capas
+        // Crear capas base
         var osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
+
         var satelite = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png');
         var blancoNegro = L.tileLayer('https://tiles.wmflabs.org/bw-mapnik/{z}/{x}/{y}.png');
-        var baseMaps = { "OSM": osm, "Satelital": satelite, "Blanco y Negro": blancoNegro };
+        
+        var baseMaps = {
+            "OSM": osm,
+            "Satelital": satelite,
+            "Blanco y Negro": blancoNegro
+        };
+
+        // Añadir control de capas base
         L.control.layers(baseMaps).addTo(map);
-        console.log("Capas base añadidas.");
 
         // URL del archivo GeoJSON
-        var geoJsonUrl = 'https://diecas8.github.io/geportal-casanare/fincasssss.geojson';
+       var geoJsonUrl1 = 'fincasssss.geojson';
 
-        // Variables globales
+        // Variables para almacenar datos y ubicación
         var geojsonLayer, searchMarker;
+        var savedLocations = [];
+        var userMarker; // Variable para almacenar el marcador de la ubicación del usuario
 
-        // Intentar cargar el archivo GeoJSON
-        fetch(geoJsonUrl)
+        // Estilo de los polígonos
+        function stylePredios(feature) {
+            return {
+                color: "#ff7800",
+                weight: 2,
+                opacity: 0.8,
+                fillOpacity: 0.4
+            };
+        }
+
+        // Mostrar información de la finca en el panel lateral
+        function showFeatureInfo(feature) {
+            var infoContent = "<strong>Detalles del Predio:</strong><br>";
+            for (let property in feature.properties) {
+                infoContent += <strong>${property}:</strong> ${feature.properties[property]}<br>;
+            }
+            document.getElementById('info').innerHTML = infoContent;
+        }
+
+        // Manejar cada predio en el GeoJSON y agregar evento de clic para mostrar detalles
+        function onEachFeature(feature, layer) {
+            layer.on({
+                click: function () {
+                    showFeatureInfo(feature);
+                }
+            });
+            layer.bindPopup(
+                <strong>Predio:</strong> ${feature.properties.nom_finca || 'No disponible'}<br>
+                <strong>Código Finca:</strong> ${feature.properties.cod_finca || 'No disponible'}<br>
+                <strong>Propietario:</strong> ${feature.properties.propietario || 'No disponible'}
+            );
+        }
+
+        // Cargar y agregar el archivo GeoJSON con manejo de errores
+        fetch(geoJsonUrl1)
             .then(response => {
                 if (!response.ok) {
-                    throw new Error("No se pudo cargar el archivo GeoJSON.");
+                    throw new Error(Error al cargar el archivo GeoJSON: ${response.statusText});
                 }
                 return response.json();
             })
             .then(data => {
-                console.log("Archivo GeoJSON cargado correctamente.");
                 geojsonLayer = L.geoJSON(data, {
-                    onEachFeature: onEachFeature,
-                    style: { color: "#ff7800", weight: 2, opacity: 0.8, fillOpacity: 0.4 }
+                    style: stylePredios,
+                    onEachFeature: onEachFeature
                 }).addTo(map);
+                console.log("Archivo GeoJSON cargado correctamente.");
             })
             .catch(error => {
-                console.error("Error al cargar el archivo GeoJSON:", error);
-                alert("Error al cargar el archivo GeoJSON. Verifique la URL o el servidor.");
+                console.error('Error al cargar el archivo GeoJSON:', error);
+                alert("No se pudo cargar el archivo GeoJSON. Verifica la URL o el servidor local.");
             });
 
-        // Función para buscar predios por código de finca
+        // Búsqueda por código de finca
         function searchFinca() {
             var codFinca = document.getElementById('searchField').value.trim();
-            if (!codFinca) {
-                alert("Ingrese un código de finca.");
-                return;
-            }
+            if (!codFinca) return alert("Ingrese un código de finca.");
 
             var found = false;
             geojsonLayer.eachLayer(function(layer) {
@@ -149,35 +202,112 @@
             if (!found) alert("No se encontró ningún predio con el código especificado.");
         }
 
-        // Función para restablecer la vista inicial del mapa
         function resetView() {
             map.setView([5.3895, -72.3945], 7);
             if (searchMarker) map.removeLayer(searchMarker);
-            document.getElementById('info').innerHTML = "Selecciona un predio en el mapa para ver detalles.";
+            document.getElementById('info').innerHTML = "Selecciona un predio para ver detalles.";
         }
 
-        // Función para mostrar la información de un predio en el sidebar
-        function showFeatureInfo(feature) {
-            var infoContent = `<strong>Detalles del Predio:</strong><br>`;
-            for (let property in feature.properties) {
-                infoContent += `<strong>${property}:</strong> ${feature.properties[property]}<br>`;
-            }
-            document.getElementById('info').innerHTML = infoContent;
-        }
+        // Función para guardar la ubicación actual
+        function saveCurrentLocation() {
+            if (!navigator.geolocation) return alert("Geolocalización no disponible.");
 
-        // Manejo de cada predio en el GeoJSON y evento de clic para mostrar detalles
-        function onEachFeature(feature, layer) {
-            layer.on({
-                click: function () {
-                    showFeatureInfo(feature);
+            navigator.geolocation.getCurrentPosition(position => {
+                var lat = position.coords.latitude;
+                var lng = position.coords.longitude;
+
+                var finca = prompt("Nombre de la finca:");
+                var propietario = prompt("Nombre del propietario:");
+
+                if (finca && propietario) {
+                    savedLocations.push({ lat, lng, finca, propietario });
+
+                    L.marker([lat, lng], { icon: L.divIcon({ className: 'fas fa-map-marker-alt', html: '<i class="fas fa-map-marker-alt" style="color: green;"></i>' }) })
+                        .addTo(map)
+                        .bindPopup(<strong>Finca:</strong> ${finca}<br><strong>Propietario:</strong> ${propietario}<br><strong>Coordenadas:</strong> ${lat}, ${lng});
+
+                    updateSavedLocations();
                 }
             });
-            layer.bindPopup(`
-                <strong>Predio:</strong> ${feature.properties.nom_finca || 'No disponible'}<br>
-                <strong>Código Finca:</strong> ${feature.properties.cod_finca || 'No disponible'}<br>
-                <strong>Propietario:</strong> ${feature.properties.propietario || 'No disponible'}
-            `);
         }
+
+        // Mostrar ubicaciones guardadas en el sidebar
+        function updateSavedLocations() {
+            var list = savedLocations.map(loc => <li><strong>Finca:</strong> ${loc.finca} - <strong>Propietario:</strong> ${loc.propietario} - (${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)})</li>).join('');
+            document.getElementById('savedLocations').innerHTML = <ul>${list}</ul>;
+        }
+
+        // Exportar ubicaciones a Excel
+        function exportToExcel() {
+            if (savedLocations.length === 0) {
+                alert("No hay ubicaciones guardadas para exportar.");
+                return;
+            }
+
+            // Preparar datos para el archivo Excel
+            var worksheetData = savedLocations.map(location => ({
+                "Nombre de la Finca": location.finca,
+                "Propietario": location.propietario,
+                "Latitud": location.lat,
+                "Longitud": location.lng
+            }));
+
+            // Crear hoja de cálculo y libro de trabajo
+            var worksheet = XLSX.utils.json_to_sheet(worksheetData);
+            var workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Ubicaciones Guardadas");
+
+            // Exportar a archivo Excel
+            XLSX.writeFile(workbook, "Ubicaciones_Guardadas.xlsx");
+        }
+
+        // Control de opacidad
+        function updateOpacity(opacity) {
+            geojsonLayer.eachLayer(function(layer) {
+                layer.setStyle({ fillOpacity: opacity });
+            });
+        }
+
+        // Seguir la posición del usuario y actualizar el marcador
+        function trackUserLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.watchPosition(
+                    function(position) {
+                        var lat = position.coords.latitude;
+                        var lng = position.coords.longitude;
+
+                        // Si el marcador ya existe, actualizar su posición
+                        if (userMarker) {
+                            userMarker.setLatLng([lat, lng]);
+                        } else {
+                            // Crear el marcador de usuario si no existe
+                            userMarker = L.marker([lat, lng], {
+                                icon: L.divIcon({
+                                    html: '<i class="fas fa-user-circle" style="color: red; font-size: 24px;"></i>',
+                                    className: 'custom-marker',
+                                    iconSize: [30, 42],
+                                    iconAnchor: [15, 42]
+                                })
+                            }).addTo(map).bindPopup("Tu posición actual").openPopup();
+                        }
+                    },
+                    function(error) {
+                        console.error("Error al obtener la ubicación:", error.message);
+                        alert("No se pudo obtener tu ubicación. Asegúrate de que el GPS esté activado y que el navegador tenga permiso para acceder a la ubicación.");
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        maximumAge: 10000,
+                        timeout: 5000
+                    }
+                );
+            } else {
+                alert("Tu navegador no soporta geolocalización.");
+            }
+        }
+
+        // Iniciar seguimiento de la ubicación del usuario
+        trackUserLocation();
     </script>
 </body>
 </html>
