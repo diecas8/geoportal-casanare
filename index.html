@@ -44,9 +44,10 @@
     <div class="sidebar">
         <img src="CBS.png" class="logo" alt="Logo">
         <div class="filter">
-            <strong>Filtrar por Código de Finca</strong><br>
-            <input type="text" id="codigoFinca" placeholder="Ingrese código de finca" onkeypress="if(event.key === 'Enter') filtrarPorFinca()" />
-            <button onclick="filtrarPorFinca()">Filtrar</button>
+            <strong>Seleccionar Código de Finca</strong><br>
+            <select id="codigoFinca" onchange="filtrarPorFinca()">
+                <option value="">Seleccione una finca</option>
+            </select>
         </div>
         <div id="summary" class="summary"></div>
         <div class="chart-container">
@@ -69,7 +70,6 @@
         }).addTo(map);
 
         var baseMaps = { "OpenStreetMap": osmBase };
-
         var bounds = L.latLngBounds();
         var usosLayer, fincasLayer, rutasLayer;
         var layerControl = L.control.layers(null, null, { collapsed: false }).addTo(map);
@@ -90,46 +90,50 @@
             return { color: color, fillOpacity: 0.5, weight: 1 };
         }
 
+        function cargarListaDesplegable(fincas) {
+            const select = document.getElementById("codigoFinca");
+            fincas.forEach(finca => {
+                const option = document.createElement("option");
+                option.value = finca.codigo;
+                option.textContent = `${finca.nombre} (${finca.codigo})`;
+                select.appendChild(option);
+            });
+        }
+
         fetch("Cultivos.geojson")
             .then(response => response.json())
             .then(data => {
+                const fincas = [];
                 usosLayer = L.geoJSON(data, {
                     style: estiloUsos,
                     onEachFeature: function(feature, layer) {
                         const areaFormatted = parseFloat(feature.properties.has).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                         layer.bindPopup(`Cultivo: ${feature.properties.cultivo}<br>Área: ${areaFormatted} ha`);
+
+                        // Agregar finca a la lista desplegable si no está ya incluida
+                        const codigoFinca = feature.properties.cod_finca?.trim();
+                        const nombreFinca = feature.properties.nom_finca?.trim();
+                        if (codigoFinca && nombreFinca) {
+                            const fincaExistente = fincas.find(f => f.codigo === codigoFinca);
+                            if (!fincaExistente) {
+                                fincas.push({ codigo: codigoFinca, nombre: nombreFinca });
+                            }
+                        }
                     }
                 });
                 usosLayer.addTo(map);
                 layerControl.addOverlay(usosLayer, "Cultivos");
                 bounds.extend(usosLayer.getBounds());
+                cargarListaDesplegable(fincas);
             })
             .catch(error => console.error("Error cargando Cultivos.geojson:", error));
 
-        fetch("fincas.geojson")
-            .then(response => response.json())
-            .then(data => {
-                fincasLayer = L.geoJSON(data, { style: { color: '#000', weight: 2, fillOpacity: 0 } });
-                fincasLayer.addTo(map);
-                layerControl.addOverlay(fincasLayer, "Fincas");
-                bounds.extend(fincasLayer.getBounds());
-            })
-            .catch(error => console.error("Error cargando fincas.geojson:", error));
-
-        fetch("Rutas.geojson")
-            .then(response => response.json())
-            .then(data => {
-                rutasLayer = L.geoJSON(data, { style: { color: '#FFA500', weight: 2 } });
-                rutasLayer.addTo(map);
-                layerControl.addOverlay(rutasLayer, "Rutas");
-                bounds.extend(rutasLayer.getBounds());
-            })
-            .catch(error => console.error("Error cargando Rutas.geojson:", error));
-
-        setTimeout(() => map.fitBounds(bounds), 500);
-
         function filtrarPorFinca() {
-            var codigoFinca = document.getElementById("codigoFinca").value.trim().toLowerCase();
+            var codigoFinca = document.getElementById("codigoFinca").value;
+            if (!codigoFinca) {
+                alert("Seleccione un código de finca.");
+                return;
+            }
             var resumen = {};
             var totalArea = 0;
             var propietario = "";
@@ -137,7 +141,7 @@
             var fincaBounds = L.latLngBounds();
 
             usosLayer.eachLayer(function(layer) {
-                if (layer.feature.properties.cod_finca && layer.feature.properties.cod_finca.trim().toLowerCase() === codigoFinca) {
+                if (layer.feature.properties.cod_finca && layer.feature.properties.cod_finca.trim() === codigoFinca) {
                     map.addLayer(layer);
                     fincaBounds.extend(layer.getBounds());
                     var cultivo = layer.feature.properties.cultivo;
@@ -154,11 +158,11 @@
             if (fincaBounds.isValid()) {
                 map.fitBounds(fincaBounds);
             } else {
-                alert("Código de finca no encontrado.");
+                alert("No se encontraron datos para esta finca.");
             }
 
             var summaryDiv = document.getElementById("summary");
-            summaryDiv.innerHTML = `<strong>Resumen de Cultivos para Finca ${codigoFinca.toUpperCase()}</strong><br>`;
+            summaryDiv.innerHTML = `<strong>Resumen de Cultivos para Finca ${codigoFinca}</strong><br>`;
             summaryDiv.innerHTML += `Propietario: ${propietario}<br>`;
             summaryDiv.innerHTML += `Nombre de la Finca: ${nombreFinca}<br><br>`;
             var labels = [], data = [], backgroundColors = [];
