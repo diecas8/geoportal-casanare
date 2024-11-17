@@ -82,15 +82,63 @@
         // Inicialización del mapa
         var map = L.map('map').setView([5.5, -73.0], 6); // Ajustar coordenadas a tu región
 
-        // Capas base
-        var osmBase = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 18,
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(map);
+       // Capas base
+var osmBase = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18,
+    attribution: '© OpenStreetMap contributors'
+}).addTo(map);
 
-        var bounds = L.latLngBounds();
-        var usosLayer, fincasLayer, rutasLayer;
-        var chart;
+var satelliteBase = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+    maxZoom: 20,
+    subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+    attribution: 'Imágenes © Google'
+});
+
+var hybridBase = L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+    maxZoom: 20,
+    subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+    attribution: 'Imágenes © Google'
+});
+
+var topoBase = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+    maxZoom: 17,
+    attribution: 'Map data © OpenTopoMap contributors'
+});
+
+var watercolorBase = L.tileLayer('https://stamen-tiles.a.ssl.fastly.net/watercolor/{z}/{x}/{y}.jpg', {
+    maxZoom: 16,
+    attribution: 'Map tiles by Stamen Design, CC BY 3.0 — Map data © OpenStreetMap contributors'
+});
+
+var terrainBase = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 13,
+    attribution: 'Tiles &copy; Esri &mdash; Source: USGS, Esri, TANA, DeLorme, and NPS'
+});
+
+var darkBase = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://carto.com/">CARTO</a>'
+});
+
+var lightBase = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://carto.com/">CARTO</a>'
+});
+
+// Añadir los mapas base al control de capas
+var baseMaps = {
+    "OpenStreetMap": osmBase,
+    "Satélite": satelliteBase,
+    "Híbrido": hybridBase,
+    "Topográfico": topoBase,
+    "Acuarela": watercolorBase,
+    "Terreno": terrainBase,
+    "Oscuro": darkBase,
+    "Claro": lightBase
+};
+
+L.control.layers(baseMaps, null, { collapsed: false }).addTo(map);
+
 
        // Asignación de colores para los cultivos
 const colorMap = {
@@ -130,16 +178,27 @@ const colorMap = {
             return { color: color, fillOpacity: 0.5, weight: 1 };
         }
 
-        // Genera lista desplegable
-        function cargarListaDesplegable(fincas) {
-            const select = document.getElementById("codigoFinca");
-            fincas.forEach(finca => {
-                const option = document.createElement("option");
-                option.value = finca.codigo;
-                option.textContent = `${finca.nombre} (${finca.codigo})`;
-                select.appendChild(option);
-            });
+       // Genera lista desplegable basada en la capa Cultivos
+function cargarListaDesplegableDesdeCultivos(capaCultivos) {
+    const select = document.getElementById("codigoFinca");
+    const fincasUnicas = new Set(); // Usamos un conjunto para evitar duplicados
+
+    capaCultivos.eachLayer(function (layer) {
+        const propiedades = layer.feature.properties;
+        const codigoFinca = propiedades.cod_finca?.trim();
+        const nombreFinca = propiedades.nom_finca?.trim();
+
+        // Si el código y el nombre existen, los agregamos a la lista si no están duplicados
+        if (codigoFinca && nombreFinca && !fincasUnicas.has(codigoFinca)) {
+            fincasUnicas.add(codigoFinca);
+            const option = document.createElement("option");
+            option.value = codigoFinca;
+            option.textContent = `${nombreFinca} (${codigoFinca})`;
+            select.appendChild(option);
         }
+    });
+}
+
 
         // Cargar capa de cultivos
         fetch("Cultivos.geojson")
