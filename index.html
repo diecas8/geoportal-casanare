@@ -58,63 +58,70 @@
             "Oscuro": darkBase,
             "Claro": lightBase
         };
-        L.control.layers(baseMaps, null, { collapsed: false }).addTo(map);
 
         var usosLayer, fincasLayer, rutasLayer, chart;
 
-      // Asignación de colores para los cultivos (actualizado)
-const colorMap = {
-    'bosque de galería': '#006400',  // Verde oscuro
-    'arroz': '#FFD700',              // Amarillo
-    'pasto limpio': '#D2B48C',       // Café claro
-    'pasto arbolado': '#FF6347',     // Rojo claro
-    'pasto enmalezado': '#ADFF2F',   // Verde claro (nuevo color agregado)
-    'palma aceite': '#CD853F',       // Café oscuro
-    'cacao': '#8B4513',              // Marrón oscuro
-    'maíz': '#FFD700',               // Amarillo
-    'banano': '#228B22',             // Verde
-    'plátano': '#32CD32',            // Verde claro
-    'café': '#8B0000',               // Rojo oscuro
-    'papaya': '#FFA500',             // Naranja
-    'frutales': '#FF69B4',           // Rosa
-    'hortalizas': '#98FB98',         // Verde pálido
-    'leguminosas': '#8A2BE2',        // Púrpura
-    'cítricos': '#FF8C00',           // Naranja oscuro
-    'pastizales': '#ADFF2F',         // Verde claro
-    'eucalipto': '#A9A9A9',          // Gris oscuro
-    'otros': '#FF0000',              // Rojo
-    'ríos': '#0000FF',               // Azul
-    'humedales': '#87CEFA',          // Azul claro
-    'bosques secundarios': '#228B22', // Verde oscuro
-    'mango': '#FFA07A',              // Salmón
-    'caña': '#D2691E',               // Marrón claro
-    'flores': '#FF1493',             // Rosa intenso
-    'bosques primarios': '#006400',  // Verde oscuro
-    'cultivos mixtos': '#9370DB'     // Púrpura suave
-};
+        // Asignación de colores para los cultivos
+        const colorMap = {
+            'bosque de galería': '#006400',
+            'arroz': '#FFD700',
+            'pasto limpio': '#D2B48C',
+            'pasto arbolado': '#FF6347',
+            'pasto enmalezado': '#ADFF2F',
+            'palma aceite': '#CD853F',
+            'cacao': '#8B4513',
+            'maíz': '#FFD700',
+            'banano': '#228B22',
+            'plátano': '#32CD32',
+            'café': '#8B0000',
+            'papaya': '#FFA500',
+            'frutales': '#FF69B4',
+            'hortalizas': '#98FB98',
+            'leguminosas': '#8A2BE2',
+            'cítricos': '#FF8C00',
+            'pastizales': '#ADFF2F',
+            'eucalipto': '#A9A9A9',
+            'otros': '#FF0000',
+            'ríos': '#0000FF',
+            'humedales': '#87CEFA',
+            'bosques secundarios': '#228B22',
+            'mango': '#FFA07A',
+            'caña': '#D2691E',
+            'flores': '#FF1493',
+            'bosques primarios': '#006400',
+            'cultivos mixtos': '#9370DB'
+        };
 
-      // Estilo de los cultivos
-function estiloUsos(feature) {
-    const cultivo = feature.properties.cultivo?.trim().toLowerCase();
-    const color = colorMap[cultivo] || 'gray'; // Si el cultivo no tiene color, se usa gris
-    return { color: color, fillOpacity: 0.5, weight: 1 };
-}
+        // Estilo de los cultivos
+        function estiloUsos(feature) {
+            const cultivo = feature.properties.cultivo?.trim().toLowerCase();
+            const color = colorMap[cultivo] || 'gray'; // Color por defecto: gris
+            return { color: color, fillOpacity: 0.5, weight: 1 };
+        }
 
         // Generar lista desplegable desde Cultivos
         function cargarListaDesplegableDesdeCultivos(capaCultivos) {
             const select = document.getElementById("codigoFinca");
-            const fincasUnicas = new Set();
+            const fincas = [];
+
             capaCultivos.eachLayer(layer => {
                 const propiedades = layer.feature.properties;
                 const codigoFinca = propiedades.cod_finca?.trim();
                 const nombreFinca = propiedades.nom_finca_?.trim();
-                if (codigoFinca && nombreFinca && !fincasUnicas.has(codigoFinca)) {
-                    fincasUnicas.add(codigoFinca);
-                    const option = document.createElement("option");
-                    option.value = codigoFinca;
-                    option.textContent = `${nombreFinca} (${codigoFinca})`;
-                    select.appendChild(option);
+                if (codigoFinca && nombreFinca) {
+                    fincas.push({ codigo: codigoFinca, nombre: nombreFinca });
                 }
+            });
+
+            // Ordenar las fincas alfabéticamente por código
+            fincas.sort((a, b) => a.codigo.localeCompare(b.codigo));
+
+            // Agregar las fincas a la lista desplegable
+            fincas.forEach(finca => {
+                const option = document.createElement("option");
+                option.value = finca.codigo;
+                option.textContent = `${finca.codigo} (${finca.nombre})`;
+                select.appendChild(option);
             });
         }
 
@@ -136,17 +143,23 @@ function estiloUsos(feature) {
         fetch("fincas.geojson")
             .then(response => response.json())
             .then(data => {
-                fincasLayer = L.geoJSON(data, { style: { color: '#000', weight: 2, fillOpacity: 0 } });
-                fincasLayer.addTo(map);
+                fincasLayer = L.geoJSON(data, { style: { color: '#000', weight: 2, fillOpacity: 0 } }).addTo(map);
             });
 
         // Cargar capa de rutas
         fetch("Rutas.geojson")
             .then(response => response.json())
             .then(data => {
-                rutasLayer = L.geoJSON(data, { style: { color: '#FFA500', weight: 2 } });
-                rutasLayer.addTo(map);
+                rutasLayer = L.geoJSON(data, { style: { color: '#FFA500', weight: 2 } }).addTo(map);
             });
+
+        // Añadir el control de capas
+        var overlayMaps = {
+            "Cultivos": usosLayer,
+            "Fincas": fincasLayer,
+            "Rutas": rutasLayer
+        };
+        L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(map);
 
         // Función para filtrar por finca
         function filtrarPorFinca() {
