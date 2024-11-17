@@ -62,41 +62,47 @@
 
         var usosLayer, fincasLayer, rutasLayer, chart;
 
-        // Asignación completa de colores para los cultivos
-        const colorMap = {
-            'bosque de galería': '#006400',
-            'arroz': '#FFD700',
-            'pasto limpio': '#D2B48C',
-            'pasto arbolado': '#FF6347',
-            'palma aceite': '#CD853F',
-            'cacao': '#8B4513',
-            'maíz': '#FFD700',
-            'banano': '#228B22',
-            'plátano': '#32CD32',
-            'café': '#8B0000',
-            'papaya': '#FFA500',
-            'frutales': '#FF69B4',
-            'hortalizas': '#98FB98',
-            'leguminosas': '#8A2BE2',
-            'cítricos': '#FF8C00',
-            'pastizales': '#ADFF2F',
-            'eucalipto': '#A9A9A9',
-            'otros': '#FF0000',
-            'ríos': '#0000FF',
-            'humedales': '#87CEFA',
-            'bosques secundarios': '#228B22',
-            'mango': '#FFA07A',
-            'caña': '#D2691E',
-            'flores': '#FF1493',
-            'bosques primarios': '#006400',
-            'cultivos mixtos': '#9370DB'
-        };
+       // Estilo de los cultivos basado en el mapa de colores
+function estiloUsos(feature) {
+    const colorMap = {
+        'bosque de galería': '#006400',  // Verde oscuro
+        'arroz': '#FFD700',              // Amarillo
+        'pasto limpio': '#D2B48C',       // Café claro
+        'pasto arbolado': '#FF6347',     // Rojo claro
+        'palma aceite': '#CD853F',       // Café oscuro
+        'cacao': '#8B4513',              // Marrón oscuro
+        'maíz': '#FFD700',               // Amarillo
+        'banano': '#228B22',             // Verde
+        'plátano': '#32CD32',            // Verde claro
+        'café': '#8B0000',               // Rojo oscuro
+        'papaya': '#FFA500',             // Naranja
+        'frutales': '#FF69B4',           // Rosa
+        'hortalizas': '#98FB98',         // Verde pálido
+        'leguminosas': '#8A2BE2',        // Púrpura
+        'cítricos': '#FF8C00',           // Naranja oscuro
+        'pastizales': '#ADFF2F',         // Verde claro
+        'eucalipto': '#A9A9A9',          // Gris oscuro
+        'otros': '#FF0000',              // Rojo
+        'ríos': '#0000FF',               // Azul
+        'humedales': '#87CEFA',          // Azul claro
+        'bosques secundarios': '#228B22', // Verde oscuro
+        'mango': '#FFA07A',              // Salmón
+        'caña': '#D2691E',               // Marrón claro
+        'flores': '#FF1493',             // Rosa intenso
+        'bosques primarios': '#006400',  // Verde oscuro
+        'cultivos mixtos': '#9370DB'     // Púrpura suave
+    };
 
-        // Estilo de los cultivos
-        function estiloUsos(feature) {
-            const cultivo = feature.properties.cultivo?.trim().toLowerCase();
-            return { color: colorMap[cultivo] || 'gray', fillOpacity: 0.5, weight: 1 };
-        }
+    // Determinar el color basado en el cultivo
+    const cultivo = feature.properties.cultivo ? feature.properties.cultivo.trim().toLowerCase() : "";
+    const color = colorMap[cultivo] || 'gray'; // Color por defecto: gris
+    return {
+        color: color,
+        fillOpacity: 0.5,
+        weight: 1
+    };
+}
+
 
         // Generar lista desplegable desde Cultivos
         function cargarListaDesplegableDesdeCultivos(capaCultivos) {
@@ -116,15 +122,18 @@
             });
         }
 
-        // Cargar capa de cultivos
-        fetch("Cultivos.geojson")
-            .then(response => response.json())
-            .then(data => {
-                usosLayer = L.geoJSON(data, {
-                    style: estiloUsos
-                }).addTo(map);
-                cargarListaDesplegableDesdeCultivos(usosLayer);
-            });
+       fetch("Cultivos.geojson")
+    .then(response => response.json())
+    .then(data => {
+        usosLayer = L.geoJSON(data, {
+            style: estiloUsos,
+            onEachFeature: function(feature, layer) {
+                const areaFormatted = parseFloat(feature.properties.has).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                layer.bindPopup(`Cultivo: ${feature.properties.cultivo}<br>Área: ${areaFormatted} ha`);
+            }
+        }).addTo(map);
+    });
+
 
         // Cargar capa de fincas
         fetch("fincas.geojson")
