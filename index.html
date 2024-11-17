@@ -18,7 +18,6 @@
     </style>
 </head>
 <body>
-    <!-- Sidebar para la lista desplegable -->
     <div class="sidebar">
         <img src="CBS.png" class="logo" alt="Logo">
         <div class="filter">
@@ -27,31 +26,25 @@
                 <option value="">Seleccione una finca</option>
             </select>
         </div>
-        <!-- Resumen de la finca -->
         <div id="summary" class="summary">
             <strong>Resumen de la Finca</strong><br>
             Seleccione una finca para ver los detalles.
         </div>
-        <!-- Contenedor del gráfico -->
         <div class="chart-container">
             <canvas id="chart"></canvas>
         </div>
-        <!-- Botón para descargar datos -->
         <button class="download-btn" onclick="descargarDatos()">Descargar Datos en Excel</button>
     </div>
-
-    <!-- Contenedor del mapa -->
     <div id="map"></div>
 
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         var map = L.map('map').setView([5.5, -73.0], 6);
+        var usosLayer, fincasLayer, rutasLayer, chart, datosFincas = [];
 
         // Capas base
         var osmBase = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
-
-        var usosLayer, fincasLayer, rutasLayer, chart, datosFincas = [];
 
         // Asignación de colores para los cultivos
         const colorMap = {
@@ -70,7 +63,6 @@
             'otros': '#FF0000'
         };
 
-        // Estilo de los cultivos
         function estiloUsos(feature) {
             const cultivo = feature.properties.cultivo?.trim().toLowerCase();
             const color = colorMap[cultivo] || 'gray'; // Color por defecto: gris
@@ -91,10 +83,8 @@
                 }
             });
 
-            // Ordenar las fincas alfabéticamente por código
             fincas.sort((a, b) => a.codigo.localeCompare(b.codigo));
 
-            // Agregar las fincas a la lista desplegable
             fincas.forEach(finca => {
                 const option = document.createElement("option");
                 option.value = finca.codigo;
@@ -103,7 +93,6 @@
             });
         }
 
-        // Cargar capa de cultivos
         fetch("Cultivos.geojson")
             .then(response => response.json())
             .then(data => {
@@ -113,7 +102,6 @@
                         const areaFormatted = parseFloat(feature.properties.has).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                         layer.bindPopup(`Cultivo: ${feature.properties.cultivo}<br>Área: ${areaFormatted} ha`);
 
-                        // Guardar datos para exportar
                         datosFincas.push({
                             Codigo: feature.properties.cod_finca,
                             Finca: feature.properties.nom_finca_,
@@ -126,7 +114,6 @@
                 cargarListaDesplegableDesdeCultivos(usosLayer);
             });
 
-        // Función para generar gráfico
         function generarGrafico(resumen) {
             const labels = [], data = [], backgroundColors = [];
             for (let cultivo in resumen) {
@@ -153,7 +140,6 @@
             });
         }
 
-        // Función para filtrar por finca
         function filtrarPorFinca() {
             const codigoFinca = document.getElementById("codigoFinca").value;
             if (!codigoFinca) {
@@ -198,7 +184,6 @@
             generarGrafico(resumen);
         }
 
-        // Función para descargar datos en Excel
         function descargarDatos() {
             const ws = XLSX.utils.json_to_sheet(datosFincas);
             const wb = XLSX.utils.book_new();
