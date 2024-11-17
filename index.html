@@ -6,48 +6,10 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <style>
         #map { height: 600px; width: 65%; float: left; }
-        .sidebar {
-            width: 20%;
-            float: left;
-            padding: 10px;
-            background-color: #f8f9fa;
-            box-sizing: border-box;
-            height: 600px;
-            overflow-y: auto;
-        }
-        .summary {
-            width: 15%;
-            float: right;
-            padding: 10px;
-            background-color: #ffffff;
-            box-sizing: border-box;
-            height: 600px;
-            overflow-y: auto;
-            border-left: 1px solid #ddd;
-        }
-        .logo {
-            width: 100px;
-            display: block;
-            margin: 0 auto 10px;
-        }
-        .filter, .chart-container {
-            background: white;
-            padding: 10px;
-            color: #333;
-            font-size: 14px;
-            margin-top: 10px;
-            line-height: 1.5;
-        }
-        .chart-container {
-            width: 100%;
-            height: 200px;
-        }
-        .credits {
-            text-align: center;
-            margin-top: 10px;
-            font-size: 12px;
-            color: #555;
-        }
+        .sidebar { width: 20%; float: left; padding: 10px; background-color: #f8f9fa; height: 600px; overflow-y: auto; }
+        .summary { width: 15%; float: right; padding: 10px; background-color: #ffffff; height: 600px; border-left: 1px solid #ddd; }
+        .logo { width: 100px; display: block; margin: 0 auto 10px; }
+        .filter, .chart-container { background: white; padding: 10px; color: #333; font-size: 14px; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -79,154 +41,90 @@
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-        // Inicialización del mapa
-        var map = L.map('map').setView([5.5, -73.0], 6); // Ajustar coordenadas a tu región
+        var map = L.map('map').setView([5.5, -73.0], 6);
 
-       // Capas base
-var osmBase = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 18,
-    attribution: '© OpenStreetMap contributors'
-}).addTo(map);
+        // Capas base
+        var osmBase = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
+        var satelliteBase = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18 });
+        var topoBase = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxZoom: 17 });
+        var darkBase = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 });
+        var lightBase = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 });
 
-var satelliteBase = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
-    maxZoom: 20,
-    subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
-    attribution: 'Imágenes © Google'
-});
+        // Añadir los mapas base al control de capas
+        var baseMaps = {
+            "OpenStreetMap": osmBase,
+            "Satélite": satelliteBase,
+            "Topográfico": topoBase,
+            "Oscuro": darkBase,
+            "Claro": lightBase
+        };
+        L.control.layers(baseMaps, null, { collapsed: false }).addTo(map);
 
-var hybridBase = L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
-    maxZoom: 20,
-    subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
-    attribution: 'Imágenes © Google'
-});
+        var usosLayer, fincasLayer, rutasLayer, chart;
 
-var topoBase = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-    maxZoom: 17,
-    attribution: 'Map data © OpenTopoMap contributors'
-});
-
-var watercolorBase = L.tileLayer('https://stamen-tiles.a.ssl.fastly.net/watercolor/{z}/{x}/{y}.jpg', {
-    maxZoom: 16,
-    attribution: 'Map tiles by Stamen Design, CC BY 3.0 — Map data © OpenStreetMap contributors'
-});
-
-var terrainBase = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}', {
-    maxZoom: 13,
-    attribution: 'Tiles &copy; Esri &mdash; Source: USGS, Esri, TANA, DeLorme, and NPS'
-});
-
-var darkBase = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    maxZoom: 19,
-    attribution: '&copy; <a href="https://carto.com/">CARTO</a>'
-});
-
-var lightBase = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-    maxZoom: 19,
-    attribution: '&copy; <a href="https://carto.com/">CARTO</a>'
-});
-
-// Añadir los mapas base al control de capas
-var baseMaps = {
-    "OpenStreetMap": osmBase,
-    "Satélite": satelliteBase,
-    "Híbrido": hybridBase,
-    "Topográfico": topoBase,
-    "Acuarela": watercolorBase,
-    "Terreno": terrainBase,
-    "Oscuro": darkBase,
-    "Claro": lightBase
-};
-
-L.control.layers(baseMaps, null, { collapsed: false }).addTo(map);
-
-
-       // Asignación de colores para los cultivos
-const colorMap = {
-    'bosque de galería': '#006400',  // Verde oscuro
-    'arroz': '#FFD700',              // Amarillo
-    'pasto limpio': '#D2B48C',       // Café claro
-    'pasto arbolado': '#FF6347',     // Rojo claro
-    'palma aceite': '#CD853F',       // Café oscuro
-    'cacao': '#8B4513',              // Marrón oscuro
-    'maíz': '#FFD700',               // Amarillo
-    'banano': '#228B22',             // Verde
-    'plátano': '#32CD32',            // Verde claro
-    'café': '#8B0000',               // Rojo oscuro
-    'papaya': '#FFA500',             // Naranja
-    'frutales': '#FF69B4',           // Rosa
-    'hortalizas': '#98FB98',         // Verde pálido
-    'leguminosas': '#8A2BE2',        // Púrpura
-    'cítricos': '#FF8C00',           // Naranja oscuro
-    'pastizales': '#ADFF2F',         // Verde claro
-    'eucalipto': '#A9A9A9',          // Gris oscuro
-    'otros': '#FF0000',              // Rojo
-    'ríos': '#0000FF',               // Azul
-    'humedales': '#87CEFA',          // Azul claro
-    'bosques secundarios': '#228B22', // Verde oscuro
-    'mango': '#FFA07A',              // Salmón
-    'caña': '#D2691E',               // Marrón claro
-    'flores': '#FF1493',             // Rosa intenso
-    'bosques primarios': '#006400',  // Verde oscuro
-    'cultivos mixtos': '#9370DB'     // Púrpura suave
-};
-
+        // Asignación completa de colores para los cultivos
+        const colorMap = {
+            'bosque de galería': '#006400',
+            'arroz': '#FFD700',
+            'pasto limpio': '#D2B48C',
+            'pasto arbolado': '#FF6347',
+            'palma aceite': '#CD853F',
+            'cacao': '#8B4513',
+            'maíz': '#FFD700',
+            'banano': '#228B22',
+            'plátano': '#32CD32',
+            'café': '#8B0000',
+            'papaya': '#FFA500',
+            'frutales': '#FF69B4',
+            'hortalizas': '#98FB98',
+            'leguminosas': '#8A2BE2',
+            'cítricos': '#FF8C00',
+            'pastizales': '#ADFF2F',
+            'eucalipto': '#A9A9A9',
+            'otros': '#FF0000',
+            'ríos': '#0000FF',
+            'humedales': '#87CEFA',
+            'bosques secundarios': '#228B22',
+            'mango': '#FFA07A',
+            'caña': '#D2691E',
+            'flores': '#FF1493',
+            'bosques primarios': '#006400',
+            'cultivos mixtos': '#9370DB'
+        };
 
         // Estilo de los cultivos
         function estiloUsos(feature) {
-            const cultivo = feature.properties.cultivo ? feature.properties.cultivo.trim().toLowerCase() : "";
-            const color = colorMap[cultivo] || 'gray';
-            return { color: color, fillOpacity: 0.5, weight: 1 };
+            const cultivo = feature.properties.cultivo?.trim().toLowerCase();
+            return { color: colorMap[cultivo] || 'gray', fillOpacity: 0.5, weight: 1 };
         }
 
-       // Genera lista desplegable basada en la capa Cultivos
-function cargarListaDesplegableDesdeCultivos(capaCultivos) {
-    const select = document.getElementById("codigoFinca");
-    const fincasUnicas = new Set(); // Usamos un conjunto para evitar duplicados
-
-    capaCultivos.eachLayer(function (layer) {
-        const propiedades = layer.feature.properties;
-        const codigoFinca = propiedades.cod_finca?.trim();
-        const nombreFinca = propiedades.nom_finca?.trim();
-
-        // Si el código y el nombre existen, los agregamos a la lista si no están duplicados
-        if (codigoFinca && nombreFinca && !fincasUnicas.has(codigoFinca)) {
-            fincasUnicas.add(codigoFinca);
-            const option = document.createElement("option");
-            option.value = codigoFinca;
-            option.textContent = `${nombreFinca} (${codigoFinca})`;
-            select.appendChild(option);
+        // Generar lista desplegable desde Cultivos
+        function cargarListaDesplegableDesdeCultivos(capaCultivos) {
+            const select = document.getElementById("codigoFinca");
+            const fincasUnicas = new Set();
+            capaCultivos.eachLayer(layer => {
+                const propiedades = layer.feature.properties;
+                const codigoFinca = propiedades.cod_finca?.trim();
+                const nombreFinca = propiedades.nom_finca?.trim();
+                if (codigoFinca && nombreFinca && !fincasUnicas.has(codigoFinca)) {
+                    fincasUnicas.add(codigoFinca);
+                    const option = document.createElement("option");
+                    option.value = codigoFinca;
+                    option.textContent = `${nombreFinca} (${codigoFinca})`;
+                    select.appendChild(option);
+                }
+            });
         }
-    });
-}
-
 
         // Cargar capa de cultivos
         fetch("Cultivos.geojson")
             .then(response => response.json())
             .then(data => {
-                const fincas = [];
                 usosLayer = L.geoJSON(data, {
-                    style: estiloUsos,
-                    onEachFeature: function(feature, layer) {
-                        const areaFormatted = parseFloat(feature.properties.has).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                        layer.bindPopup(`Cultivo: ${feature.properties.cultivo}<br>Área: ${areaFormatted} ha`);
-
-                        // Agregar finca a la lista desplegable
-                        const codigoFinca = feature.properties.cod_finca?.trim();
-                        const nombreFinca = feature.properties.nom_finca?.trim();
-                        if (codigoFinca && nombreFinca) {
-                            const fincaExistente = fincas.find(f => f.codigo === codigoFinca);
-                            if (!fincaExistente) {
-                                fincas.push({ codigo: codigoFinca, nombre: nombreFinca });
-                            }
-                        }
-                    }
-                });
-                usosLayer.addTo(map);
-                bounds.extend(usosLayer.getBounds());
-                cargarListaDesplegable(fincas);
-            })
-            .catch(error => console.error("Error cargando Cultivos.geojson:", error));
+                    style: estiloUsos
+                }).addTo(map);
+                cargarListaDesplegableDesdeCultivos(usosLayer);
+            });
 
         // Cargar capa de fincas
         fetch("fincas.geojson")
@@ -234,8 +132,7 @@ function cargarListaDesplegableDesdeCultivos(capaCultivos) {
             .then(data => {
                 fincasLayer = L.geoJSON(data, { style: { color: '#000', weight: 2, fillOpacity: 0 } });
                 fincasLayer.addTo(map);
-            })
-            .catch(error => console.error("Error cargando fincas.geojson:", error));
+            });
 
         // Cargar capa de rutas
         fetch("Rutas.geojson")
@@ -243,19 +140,16 @@ function cargarListaDesplegableDesdeCultivos(capaCultivos) {
             .then(data => {
                 rutasLayer = L.geoJSON(data, { style: { color: '#FFA500', weight: 2 } });
                 rutasLayer.addTo(map);
-            })
-            .catch(error => console.error("Error cargando Rutas.geojson:", error));
+            });
 
         // Función para generar gráfico
         function generarGrafico(resumen) {
             const labels = [], data = [], backgroundColors = [];
-
             for (let cultivo in resumen) {
                 labels.push(cultivo);
                 data.push(resumen[cultivo]);
                 backgroundColors.push(colorMap[cultivo.toLowerCase()] || 'gray');
             }
-
             if (chart) chart.destroy();
             const ctx = document.getElementById('chart').getContext('2d');
             chart = new Chart(ctx, {
@@ -289,7 +183,7 @@ function cargarListaDesplegableDesdeCultivos(capaCultivos) {
             let fincaBounds = L.latLngBounds();
 
             usosLayer.eachLayer(function(layer) {
-                if (layer.feature.properties.cod_finca && layer.feature.properties.cod_finca.trim() === codigoFinca) {
+                if (layer.feature.properties.cod_finca?.trim() === codigoFinca) {
                     fincaBounds.extend(layer.getBounds());
                     const cultivo = layer.feature.properties.cultivo;
                     const area = parseFloat(layer.feature.properties.has);
