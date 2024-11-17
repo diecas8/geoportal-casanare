@@ -51,6 +51,7 @@
     </style>
 </head>
 <body>
+    <!-- Sidebar para la lista desplegable -->
     <div class="sidebar">
         <img src="CBS.png" class="logo" alt="Logo">
         <div class="filter">
@@ -60,7 +61,11 @@
             </select>
         </div>
     </div>
+
+    <!-- Contenedor del mapa -->
     <div id="map"></div>
+
+    <!-- Resumen y gráfico -->
     <div class="summary">
         <div id="summary">
             <strong>Resumen de la Finca</strong><br>
@@ -74,8 +79,10 @@
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
+        // Inicialización del mapa
         var map = L.map('map').setView([5.5, -73.0], 6); // Ajustar coordenadas a tu región
 
+        // Capas base
         var osmBase = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 18,
             attribution: '© OpenStreetMap contributors'
@@ -85,24 +92,45 @@
         var usosLayer, fincasLayer, rutasLayer;
         var chart;
 
-        // Asignación de colores para cada tipo de cultivo
-        const colorMap = {
-            'bosque de galería': '#006400',
-            'arroz': '#FFD700',
-            'pasto limpio': '#D2B48C',
-            'pasto arbolado': '#FF6347',
-            'palma aceite': '#CD853F',
-            'otros': '#FF0000'
-        };
+       // Asignación de colores para los cultivos
+const colorMap = {
+    'bosque de galería': '#006400',  // Verde oscuro
+    'arroz': '#FFD700',              // Amarillo
+    'pasto limpio': '#D2B48C',       // Café claro
+    'pasto arbolado': '#FF6347',     // Rojo claro
+    'palma aceite': '#CD853F',       // Café oscuro
+    'cacao': '#8B4513',              // Marrón oscuro
+    'maíz': '#FFD700',               // Amarillo
+    'banano': '#228B22',             // Verde
+    'plátano': '#32CD32',            // Verde claro
+    'café': '#8B0000',               // Rojo oscuro
+    'papaya': '#FFA500',             // Naranja
+    'frutales': '#FF69B4',           // Rosa
+    'hortalizas': '#98FB98',         // Verde pálido
+    'leguminosas': '#8A2BE2',        // Púrpura
+    'cítricos': '#FF8C00',           // Naranja oscuro
+    'pastizales': '#ADFF2F',         // Verde claro
+    'eucalipto': '#A9A9A9',          // Gris oscuro
+    'otros': '#FF0000',              // Rojo
+    'ríos': '#0000FF',               // Azul
+    'humedales': '#87CEFA',          // Azul claro
+    'bosques secundarios': '#228B22', // Verde oscuro
+    'mango': '#FFA07A',              // Salmón
+    'caña': '#D2691E',               // Marrón claro
+    'flores': '#FF1493',             // Rosa intenso
+    'bosques primarios': '#006400',  // Verde oscuro
+    'cultivos mixtos': '#9370DB'     // Púrpura suave
+};
 
-        // Estilo de los polígonos de cultivos
+
+        // Estilo de los cultivos
         function estiloUsos(feature) {
             const cultivo = feature.properties.cultivo ? feature.properties.cultivo.trim().toLowerCase() : "";
             const color = colorMap[cultivo] || 'gray';
             return { color: color, fillOpacity: 0.5, weight: 1 };
         }
 
-        // Genera la lista desplegable de fincas
+        // Genera lista desplegable
         function cargarListaDesplegable(fincas) {
             const select = document.getElementById("codigoFinca");
             fincas.forEach(finca => {
@@ -159,7 +187,35 @@
             })
             .catch(error => console.error("Error cargando Rutas.geojson:", error));
 
-        // Función para filtrar la finca seleccionada
+        // Función para generar gráfico
+        function generarGrafico(resumen) {
+            const labels = [], data = [], backgroundColors = [];
+
+            for (let cultivo in resumen) {
+                labels.push(cultivo);
+                data.push(resumen[cultivo]);
+                backgroundColors.push(colorMap[cultivo.toLowerCase()] || 'gray');
+            }
+
+            if (chart) chart.destroy();
+            const ctx = document.getElementById('chart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: backgroundColors
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        }
+
+        // Función para filtrar por finca
         function filtrarPorFinca() {
             const codigoFinca = document.getElementById("codigoFinca").value;
             if (!codigoFinca) {
@@ -198,29 +254,7 @@
             summaryDiv.innerHTML += `Nombre de la Finca: ${nombreFinca}<br>`;
             summaryDiv.innerHTML += `Área Total: ${totalArea.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ha<br><br>`;
 
-            const labels = [], data = [], backgroundColors = [];
-            for (let cultivo in resumen) {
-                labels.push(cultivo);
-                data.push(resumen[cultivo]);
-                backgroundColors.push(colorMap[cultivo.toLowerCase()] || 'gray');
-            }
-
-            if (chart) chart.destroy();
-            const ctx = document.getElementById('chart').getContext('2d');
-            chart = new Chart(ctx, {
-                type: 'pie',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        data: data,
-                        backgroundColor: backgroundColors
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false
-                }
-            });
+            generarGrafico(resumen);
         }
     </script>
 </body>
