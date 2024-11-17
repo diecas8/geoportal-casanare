@@ -85,6 +85,7 @@
         var usosLayer, fincasLayer, rutasLayer;
         var chart;
 
+        // Asignación de colores para cada tipo de cultivo
         const colorMap = {
             'bosque de galería': '#006400',
             'arroz': '#FFD700',
@@ -94,12 +95,14 @@
             'otros': '#FF0000'
         };
 
+        // Estilo de los polígonos de cultivos
         function estiloUsos(feature) {
             const cultivo = feature.properties.cultivo ? feature.properties.cultivo.trim().toLowerCase() : "";
             const color = colorMap[cultivo] || 'gray';
             return { color: color, fillOpacity: 0.5, weight: 1 };
         }
 
+        // Genera la lista desplegable de fincas
         function cargarListaDesplegable(fincas) {
             const select = document.getElementById("codigoFinca");
             fincas.forEach(finca => {
@@ -110,6 +113,7 @@
             });
         }
 
+        // Cargar capa de cultivos
         fetch("Cultivos.geojson")
             .then(response => response.json())
             .then(data => {
@@ -137,6 +141,7 @@
             })
             .catch(error => console.error("Error cargando Cultivos.geojson:", error));
 
+        // Cargar capa de fincas
         fetch("fincas.geojson")
             .then(response => response.json())
             .then(data => {
@@ -145,6 +150,7 @@
             })
             .catch(error => console.error("Error cargando fincas.geojson:", error));
 
+        // Cargar capa de rutas
         fetch("Rutas.geojson")
             .then(response => response.json())
             .then(data => {
@@ -153,6 +159,7 @@
             })
             .catch(error => console.error("Error cargando Rutas.geojson:", error));
 
+        // Función para filtrar la finca seleccionada
         function filtrarPorFinca() {
             const codigoFinca = document.getElementById("codigoFinca").value;
             if (!codigoFinca) {
