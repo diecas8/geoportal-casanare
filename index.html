@@ -5,9 +5,9 @@
     <title>Geoportal</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <style>
-        #map { height: 600px; width: 75%; float: right; }
+        #map { height: 600px; width: 65%; float: left; }
         .sidebar {
-            width: 25%;
+            width: 20%;
             float: left;
             padding: 10px;
             background-color: #f8f9fa;
@@ -15,12 +15,22 @@
             height: 600px;
             overflow-y: auto;
         }
+        .summary {
+            width: 15%;
+            float: right;
+            padding: 10px;
+            background-color: #ffffff;
+            box-sizing: border-box;
+            height: 600px;
+            overflow-y: auto;
+            border-left: 1px solid #ddd;
+        }
         .logo {
             width: 100px;
             display: block;
             margin: 0 auto 10px;
         }
-        .filter, .summary, .chart-container {
+        .filter, .chart-container {
             background: white;
             padding: 10px;
             color: #333;
@@ -44,43 +54,44 @@
     <div class="sidebar">
         <img src="CBS.png" class="logo" alt="Logo">
         <div class="filter">
-            <strong>Seleccionar Código de Finca</strong><br>
+            <strong>Seleccionar Finca</strong><br>
             <select id="codigoFinca" onchange="filtrarPorFinca()">
                 <option value="">Seleccione una finca</option>
             </select>
         </div>
-        <div id="summary" class="summary"></div>
+    </div>
+    <div id="map"></div>
+    <div class="summary">
+        <div id="summary">
+            <strong>Resumen de la Finca</strong><br>
+            Seleccione una finca para ver los detalles.
+        </div>
         <div class="chart-container">
             <canvas id="chart"></canvas>
         </div>
-        <div class="credits">
-            <strong>Creado por:</strong> Diego Castaño P.
-        </div>
     </div>
-    <div id="map"></div>
 
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-        var map = L.map('map').setView([5.5, -73.0], 6); // Ajusta las coordenadas a tu región
+        var map = L.map('map').setView([5.5, -73.0], 6); // Ajustar coordenadas a tu región
 
         var osmBase = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 18,
             attribution: '© OpenStreetMap contributors'
         }).addTo(map);
 
-        var baseMaps = { "OpenStreetMap": osmBase };
         var bounds = L.latLngBounds();
-        var usosLayer;
+        var usosLayer, fincasLayer, rutasLayer;
         var chart;
 
         const colorMap = {
             'bosque de galería': '#006400',
             'arroz': '#FFD700',
-            'otros': '#FF0000',
             'pasto limpio': '#D2B48C',
             'pasto arbolado': '#FF6347',
-            'palma aceite': '#CD853F'
+            'palma aceite': '#CD853F',
+            'otros': '#FF0000'
         };
 
         function estiloUsos(feature) {
@@ -109,7 +120,7 @@
                         const areaFormatted = parseFloat(feature.properties.has).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                         layer.bindPopup(`Cultivo: ${feature.properties.cultivo}<br>Área: ${areaFormatted} ha`);
 
-                        // Agregar finca a la lista desplegable si no está ya incluida
+                        // Agregar finca a la lista desplegable
                         const codigoFinca = feature.properties.cod_finca?.trim();
                         const nombreFinca = feature.properties.nom_finca?.trim();
                         if (codigoFinca && nombreFinca) {
@@ -126,10 +137,26 @@
             })
             .catch(error => console.error("Error cargando Cultivos.geojson:", error));
 
+        fetch("fincas.geojson")
+            .then(response => response.json())
+            .then(data => {
+                fincasLayer = L.geoJSON(data, { style: { color: '#000', weight: 2, fillOpacity: 0 } });
+                fincasLayer.addTo(map);
+            })
+            .catch(error => console.error("Error cargando fincas.geojson:", error));
+
+        fetch("Rutas.geojson")
+            .then(response => response.json())
+            .then(data => {
+                rutasLayer = L.geoJSON(data, { style: { color: '#FFA500', weight: 2 } });
+                rutasLayer.addTo(map);
+            })
+            .catch(error => console.error("Error cargando Rutas.geojson:", error));
+
         function filtrarPorFinca() {
             const codigoFinca = document.getElementById("codigoFinca").value;
             if (!codigoFinca) {
-                alert("Seleccione un código de finca.");
+                alert("Seleccione una finca.");
                 return;
             }
 
@@ -161,18 +188,15 @@
             const summaryDiv = document.getElementById("summary");
             summaryDiv.innerHTML = `<strong>Resumen de Cultivos para Finca ${codigoFinca}</strong><br>`;
             summaryDiv.innerHTML += `Propietario: ${propietario}<br>`;
-            summaryDiv.innerHTML += `Nombre de la Finca: ${nombreFinca}<br><br>`;
-            const labels = [], data = [], backgroundColors = [];
+            summaryDiv.innerHTML += `Nombre de la Finca: ${nombreFinca}<br>`;
+            summaryDiv.innerHTML += `Área Total: ${totalArea.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ha<br><br>`;
 
+            const labels = [], data = [], backgroundColors = [];
             for (let cultivo in resumen) {
-                const area = resumen[cultivo].toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                summaryDiv.innerHTML += `${cultivo}: ${area} ha<br>`;
                 labels.push(cultivo);
                 data.push(resumen[cultivo]);
                 backgroundColors.push(colorMap[cultivo.toLowerCase()] || 'gray');
             }
-
-            summaryDiv.innerHTML += `<br><strong>Total de la finca: ${totalArea.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ha</strong>`;
 
             if (chart) chart.destroy();
             const ctx = document.getElementById('chart').getContext('2d');
@@ -187,18 +211,7 @@
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                    const porcentaje = ((context.raw / total) * 100).toFixed(2);
-                                    return `${context.label}: ${context.raw.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ha (${porcentaje}%)`;
-                                }
-                            }
-                        }
-                    }
+                    maintainAspectRatio: false
                 }
             });
         }
