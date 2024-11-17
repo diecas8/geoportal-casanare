@@ -105,7 +105,7 @@
             capaCultivos.eachLayer(layer => {
                 const propiedades = layer.feature.properties;
                 const codigoFinca = propiedades.cod_finca?.trim();
-                const nombreFinca = propiedades.nom_finca?.trim();
+                const nombreFinca = propiedades.nom_finca_?.trim(); // Cambiado a nom_finca_
                 if (codigoFinca && nombreFinca && !fincasUnicas.has(codigoFinca)) {
                     fincasUnicas.add(codigoFinca);
                     const option = document.createElement("option");
@@ -190,7 +190,7 @@
                     totalArea += area;
                     resumen[cultivo] = (resumen[cultivo] || 0) + area;
                     propietario = layer.feature.properties.propietari || propietario;
-                    nombreFinca = layer.feature.properties.nom_finca || nombreFinca;
+                    nombreFinca = layer.feature.properties.nom_finca_ || nombreFinca; // Cambiado a nom_finca_
                 }
             });
 
