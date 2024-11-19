@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Geoportal Corregido</title>
+    <title>Geoportal con Gráfico Dinámico</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
@@ -12,7 +12,7 @@
         .logo { width: 100px; display: block; margin: 10px auto; }
         .filter { margin-bottom: 20px; }
         .summary { margin-top: 20px; background-color: white; padding: 10px; border: 1px solid #ddd; border-radius: 5px; }
-        .chart-container { width: 100%; height: 200px; margin-top: 20px; }
+        .chart-container { width: 100%; height: 250px; margin-top: 20px; }
         .download-btn { margin-top: 20px; padding: 10px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%; }
         .download-btn:hover { background-color: #0056b3; }
     </style>
@@ -68,14 +68,6 @@
             return { color: color, fillOpacity: 0.5, weight: 1 };
         }
 
-        function estiloRutas(feature) {
-            return { color: 'blue', weight: 2, opacity: 0.8, dashArray: '5, 5' };
-        }
-
-        function estiloFincas(feature) {
-            return { color: 'green', weight: 1.5, fillOpacity: 0.4 };
-        }
-
         function cargarListaDesplegable(capa) {
             const select = document.getElementById("codigoFinca");
             const fincas = [];
@@ -123,9 +115,56 @@
             })
             .catch(error => alert(error));
 
-        // Cargar Rutas y Fincas
-        cargarGeoJSON("Rutas.geojson", estiloRutas, null, rutasLayer);
-        cargarGeoJSON("fincas.geojson", estiloFincas, null, fincasLayer);
+        function generarGrafico(resumen) {
+            const labels = [], data = [], backgroundColors = [];
+            for (let cultivo in resumen) {
+                labels.push(cultivo);
+                data.push(resumen[cultivo]);
+                backgroundColors.push(colorMap[cultivo.toLowerCase()] || 'gray');
+            }
+
+            if (chart) chart.destroy();
+            chart = new Chart(document.getElementById('chart').getContext('2d'), {
+                type: 'pie',
+                data: { labels, datasets: [{ data, backgroundColor: backgroundColors }] },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
+
+        function filtrarPorFinca() {
+            const codigoFinca = document.getElementById("codigoFinca").value;
+            if (!codigoFinca) {
+                alert("Seleccione una finca.");
+                return;
+            }
+
+            let resumen = {}, totalArea = 0, propietario = "", nombreFinca = "", fincaBounds = L.latLngBounds();
+
+            usosLayer.eachLayer(layer => {
+                const { cod_finca, cultivo, has, prop, nom_finca_ } = layer.feature.properties;
+                if (cod_finca?.trim() === codigoFinca) {
+                    fincaBounds.extend(layer.getBounds());
+                    resumen[cultivo] = (resumen[cultivo] || 0) + parseFloat(has);
+                    totalArea += parseFloat(has);
+                    propietario = prop || propietario;
+                    nombreFinca = nom_finca_ || nombreFinca;
+                }
+            });
+
+            if (fincaBounds.isValid()) map.fitBounds(fincaBounds);
+            else return alert("No se encontraron datos para esta finca.");
+
+            const summaryDiv = document.getElementById("summary");
+            summaryDiv.innerHTML = `<strong>Resumen de Cultivos para Finca ${codigoFinca}</strong><br>`;
+            summaryDiv.innerHTML += `Propietario: ${propietario}<br>Nombre de la Finca: ${nombreFinca}<br>`;
+            summaryDiv.innerHTML += `Área Total: ${totalArea.toFixed(2)} ha<br><br>`;
+
+            for (let cultivo in resumen) {
+                summaryDiv.innerHTML += `${cultivo}: ${resumen[cultivo].toFixed(2)} ha<br>`;
+            }
+
+            generarGrafico(resumen);
+        }
 
         function descargarDatos() {
             const ws = XLSX.utils.json_to_sheet(datosFincas);
