@@ -2,13 +2,13 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Geoportal Mejorado</title>
+    <title>Geoportal Corregido</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
-        body { margin: 0; padding: 0; font-family: Arial, sans-serif; display: flex; flex-wrap: wrap; }
-        #map { height: 100vh; flex: 1 1 65%; min-width: 300px; }
-        .sidebar { flex: 1 1 35%; min-width: 300px; padding: 10px; background-color: #f8f9fa; height: 100vh; overflow-y: auto; box-shadow: 0 0 5px rgba(0,0,0,0.2); }
+        body { margin: 0; padding: 0; font-family: Arial, sans-serif; display: flex; flex-wrap: nowrap; height: 100vh; }
+        #map { flex: 1 1 65%; min-width: 300px; height: 100%; }
+        .sidebar { flex: 1 1 35%; min-width: 300px; padding: 10px; background-color: #f8f9fa; height: 100%; overflow-y: auto; box-shadow: 0 0 5px rgba(0,0,0,0.2); }
         .logo { width: 100px; display: block; margin: 10px auto; }
         .filter { margin-bottom: 20px; }
         .summary { margin-top: 20px; background-color: white; padding: 10px; border: 1px solid #ddd; border-radius: 5px; }
@@ -96,7 +96,6 @@
             });
         }
 
-        // Cargar archivos GeoJSON
         function cargarGeoJSON(url, estilo, onEachFeature, capaVariable) {
             fetch(url)
                 .then(response => response.ok ? response.json() : Promise.reject(`Error cargando ${url}`))
@@ -125,24 +124,8 @@
             .catch(error => alert(error));
 
         // Cargar Rutas y Fincas
-        cargarGeoJSON("E:/colab_pfnm/proyectov2/Rutas.geojson", estiloRutas, null, rutasLayer);
-        cargarGeoJSON("E:/colab_pfnm/proyectov2/fincas.geojson", estiloFincas, null, fincasLayer);
-
-        function generarGrafico(resumen) {
-            const labels = [], data = [], backgroundColors = [];
-            for (let cultivo in resumen) {
-                labels.push(cultivo);
-                data.push(resumen[cultivo]);
-                backgroundColors.push(colorMap[cultivo.toLowerCase()] || 'gray');
-            }
-
-            if (chart) chart.destroy();
-            chart = new Chart(document.getElementById('chart').getContext('2d'), {
-                type: 'pie',
-                data: { labels, datasets: [{ data, backgroundColor: backgroundColors }] },
-                options: { responsive: true, maintainAspectRatio: false }
-            });
-        }
+        cargarGeoJSON("Rutas.geojson", estiloRutas, null, rutasLayer);
+        cargarGeoJSON("fincas.geojson", estiloFincas, null, fincasLayer);
 
         function descargarDatos() {
             const ws = XLSX.utils.json_to_sheet(datosFincas);
