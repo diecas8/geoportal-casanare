@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Geoportal con Gráfico Dinámico</title>
+    <title>Geoportal con Gráfico Interactivo</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
@@ -42,6 +42,7 @@
     <script>
         const map = L.map('map').setView([5.5, -73.0], 6);
         let usosLayer, rutasLayer, fincasLayer, chart, datosFincas = [];
+        let highlightedLayer = null;
 
         // Capas base
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
@@ -88,16 +89,6 @@
             });
         }
 
-        function cargarGeoJSON(url, estilo, onEachFeature, capaVariable) {
-            fetch(url)
-                .then(response => response.ok ? response.json() : Promise.reject(`Error cargando ${url}`))
-                .then(data => {
-                    capaVariable = L.geoJSON(data, { style: estilo, onEachFeature }).addTo(map);
-                })
-                .catch(error => alert(error));
-        }
-
-        // Cargar Cultivos
         fetch("Cultivos.geojson")
             .then(response => response.ok ? response.json() : Promise.reject("No se pudo cargar el archivo GeoJSON de cultivos."))
             .then(data => {
@@ -106,7 +97,7 @@
                     onEachFeature: (feature, layer) => {
                         const { cod_finca, nom_finca_, prop, cultivo, has } = feature.properties;
                         const areaFormatted = parseFloat(has).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                        layer.bindPopup(`Cultivo: ${cultivo}<br>Área: ${areaFormatted} ha`);
+                        layer.bindPopup(`Cultivo: ${cultivo}<br>Área: ${areaFormatted} ha<br>Productor: ${prop}`);
 
                         datosFincas.push({ Codigo: cod_finca, Finca: nom_finca_, Propietario: prop, Cultivo: cultivo, Hectareas: has });
                     }
@@ -124,10 +115,21 @@
             }
 
             if (chart) chart.destroy();
-            chart = new Chart(document.getElementById('chart').getContext('2d'), {
+            const ctx = document.getElementById('chart').getContext('2d');
+            chart = new Chart(ctx, {
                 type: 'pie',
                 data: { labels, datasets: [{ data, backgroundColor: backgroundColors }] },
-                options: { responsive: true, maintainAspectRatio: false }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    onClick: (e, elements) => {
+                        if (elements.length > 0) {
+                            const index = elements[0].index;
+                            const selectedCultivo = labels[index];
+                            resaltarCultivoEnMapa(selectedCultivo);
+                        }
+                    }
+                }
             });
         }
 
@@ -164,6 +166,20 @@
             }
 
             generarGrafico(resumen);
+        }
+
+        function resaltarCultivoEnMapa(cultivo) {
+            if (highlightedLayer) {
+                usosLayer.resetStyle(highlightedLayer);
+                highlightedLayer = null;
+            }
+
+            usosLayer.eachLayer(layer => {
+                if (layer.feature.properties.cultivo?.trim().toLowerCase() === cultivo.toLowerCase()) {
+                    layer.setStyle({ color: 'yellow', weight: 3 });
+                    highlightedLayer = layer;
+                }
+            });
         }
 
         function descargarDatos() {
