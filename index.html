@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Geoportal con Selección Ordenada por Código</title>
+    <title>Geoportal con Mapas Base Seleccionables</title>
     <!-- Estilos de Leaflet -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <!-- Script de Leaflet -->
@@ -44,7 +44,36 @@
 
     <script>
         const map = L.map('map').setView([5.5, -73.0], 6);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
+
+        // Mapas base
+        const baseMaps = {
+            "OpenStreetMap": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '© OpenStreetMap contributors'
+            }),
+            "Google Satélite": L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+                maxZoom: 20,
+                attribution: '© Google Maps'
+            }),
+            "Google Híbrido": L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+                maxZoom: 20,
+                attribution: '© Google Maps'
+            }),
+            "Esri Mundo Topográfico": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 20,
+                attribution: '© Esri & contributors'
+            }),
+            "Esri Mundo Imágenes": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 20,
+                attribution: '© Esri & contributors'
+            })
+        };
+
+        // Agregar OpenStreetMap como mapa base inicial
+        baseMaps["OpenStreetMap"].addTo(map);
+
+        // Control de capas para los mapas base
+        L.control.layers(baseMaps).addTo(map);
 
         let bosquesLayer, cultivosLayer, chart, datosFincas = [];
         let highlightedLayers = [];
@@ -118,7 +147,6 @@
             const select = document.getElementById("codigoFinca");
             const fincas = [];
 
-            // Recopilar todas las fincas
             datosFincas.forEach(finca => {
                 if (!fincas.find(f => f.codigo === finca.Codigo)) {
                     fincas.push({
@@ -128,10 +156,8 @@
                 }
             });
 
-            // Ordenar las fincas alfabéticamente por código
             fincas.sort((a, b) => a.codigo.localeCompare(b.codigo));
 
-            // Generar opciones en el select
             fincas.forEach(finca => {
                 const option = document.createElement("option");
                 option.value = finca.codigo;
@@ -187,38 +213,4 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    onClick: (e, elements) => {
-                        if (elements.length > 0) {
-                            const index = elements[0].index;
-                            const selectedCultivo = labels[index];
-                            resaltarCultivoEnMapa(selectedCultivo, codigoFinca);
-                        }
-                    }
-                }
-            });
-        }
-
-        function resaltarCultivoEnMapa(cultivo, codigoFinca) {
-            highlightedLayers.forEach(layer => cultivosLayer.resetStyle(layer));
-            highlightedLayers = [];
-
-            cultivosLayer.eachLayer(layer => {
-                const { cod_finca, cultivo: layerCultivo } = layer.feature.properties;
-
-                if (layerCultivo?.toLowerCase() === cultivo.toLowerCase() && cod_finca === codigoFinca) {
-                    layer.setStyle({ color: 'yellow', weight: 3 });
-                    highlightedLayers.push(layer);
-                }
-            });
-
-            setTimeout(() => {
-                highlightedLayers.forEach(layer => cultivosLayer.resetStyle(layer));
-                highlightedLayers = [];
-            }, 2000);
-        }
-
-        cargarBosques();
-        cargarCultivos();
-    </script>
-</body>
-</html>
+                    onClick: (e, elements) =>
