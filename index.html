@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Geoportal con Mapas Base Seleccionables</title>
+    <title>Geoportal con Selección de Mapas Base</title>
     <!-- Estilos de Leaflet -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <!-- Script de Leaflet -->
@@ -213,4 +213,5 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    onClick: (e, elements) =>
+                    onClick: (e, elements) => {
+                        if (elements
