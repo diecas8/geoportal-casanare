@@ -114,34 +114,31 @@
                 .catch(error => console.error("Error al cargar la capa de cultivos:", error));
         }
 
-      function cargarListaDesplegable() {
-    const select = document.getElementById("codigoFinca");
+        function cargarListaDesplegable() {
+            const select = document.getElementById("codigoFinca");
+            const fincas = [];
 
-    // Vaciar las opciones existentes
-    select.innerHTML = `<option value="">Seleccione una finca</option>`;
+            // Recopilar todas las fincas
+            datosFincas.forEach(finca => {
+                if (!fincas.find(f => f.codigo === finca.Codigo)) {
+                    fincas.push({
+                        codigo: finca.Codigo,
+                        nombre: finca.Finca
+                    });
+                }
+            });
 
-    const fincas = [];
+            // Ordenar las fincas alfabéticamente por código
+            fincas.sort((a, b) => a.codigo.localeCompare(b.codigo));
 
-    datosFincas.forEach(finca => {
-        if (!fincas.find(f => f.codigo === finca.Codigo)) {
-            fincas.push({
-                codigo: finca.Codigo,
-                nombre: finca.Finca
+            // Generar opciones en el select
+            fincas.forEach(finca => {
+                const option = document.createElement("option");
+                option.value = finca.codigo;
+                option.textContent = `${finca.codigo} (${finca.nombre})`;
+                select.appendChild(option);
             });
         }
-    });
-
-    // Ordenar las fincas alfabéticamente por código
-    fincas.sort((a, b) => a.codigo.localeCompare(b.codigo));
-
-    // Generar opciones en el select
-    fincas.forEach(finca => {
-        const option = document.createElement("option");
-        option.value = finca.codigo;
-        option.textContent = `${finca.codigo} (${finca.nombre})`;
-        select.appendChild(option);
-    });
-}
 
         function filtrarPorFinca() {
             const codigoFinca = document.getElementById("codigoFinca").value;
@@ -338,6 +335,44 @@
                 .catch(error => console.error("Error al cargar la capa de cultivos:", error));
         }
 
+        function cargarListaDesplegable() {
+            const select = document.getElementById("codigoFinca");
+            const fincas = [];
+
+            datosFincas.forEach(finca => {
+                if (!fincas.find(f => f.codigo === finca.Codigo)) {
+                    fincas.push({
+                        codigo: finca.Codigo,
+                        nombre: finca.Finca
+                    });
+                }
+            });
+
+            fincas.sort((a, b) => a.codigo.localeCompare(b.codigo));
+
+            fincas.forEach(finca => {
+                const option = document.createElement("option");
+                option.value = finca.codigo;
+                option.textContent = `${finca.codigo} (${finca.nombre})`;
+                select.appendChild(option);
+            });
+        }
+
+        function filtrarPorFinca() {
+            const codigoFinca = document.getElementById("codigoFinca").value;
+            const resumen = {};
+            let totalArea = 0;
+            let fincaBounds = L.latLngBounds();
+
+            cultivosLayer.eachLayer(layer => {
+                const { cod_finca, cultivo, has } = layer.feature.properties;
+
+                if (cod_finca === codigoFinca) {
+                    fincaBounds.extend(layer.getBounds());
+                    resumen[cultivo] = (resumen[cultivo] || 0) + parseFloat(has);
+                    totalArea += parseFloat(has);
+                }
+            });
 
             if (fincaBounds.isValid()) {
                 map.fitBounds(fincaBounds);
@@ -406,4 +441,3 @@ const selectedCultivo = labels[index];
     </script>
 </body>
 </html>
-
