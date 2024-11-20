@@ -3,11 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Geoportal con Exportación a Excel</title>
+    <title>Geoportal con Selección Ordenada por Código</title>
+    <!-- Estilos de Leaflet -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <!-- Script de Leaflet -->
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <!-- Script de Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         body { margin: 0; padding: 0; font-family: Arial, sans-serif; display: flex; height: 100vh; }
         #map { flex: 1; height: 100%; }
@@ -16,11 +18,9 @@
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); border-right: 1px solid #ddd;
         }
         .logo { display: block; margin: 0 auto 15px; max-width: 100px; }
-        .filter, .summary, .chart-container, .export-container { margin-bottom: 20px; }
+        .filter, .summary, .chart-container { margin-bottom: 20px; }
         .filter select { width: 100%; padding: 5px; margin-top: 5px; }
-        .summary, .chart-container, .export-container { background: white; padding: 10px; border-radius: 5px; border: 1px solid #ddd; }
-        .export-container button { width: 100%; padding: 10px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
-        .export-container button:hover { background-color: #0056b3; }
+        .summary, .chart-container { background: white; padding: 10px; border-radius: 5px; border: 1px solid #ddd; }
     </style>
 </head>
 <body>
@@ -39,42 +39,15 @@
         <div class="chart-container">
             <canvas id="chart"></canvas>
         </div>
-        <div class="export-container">
-            <button onclick="exportarDatos()">Exportar Datos de la Finca</button>
-        </div>
     </div>
     <div id="map"></div>
 
     <script>
         const map = L.map('map').setView([5.5, -73.0], 6);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
 
-        const baseMaps = {
-            "OpenStreetMap": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19,
-                attribution: '© OpenStreetMap contributors'
-            }),
-            "Google Satélite": L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
-                maxZoom: 20,
-                attribution: '© Google Maps'
-            }),
-            "Google Híbrido": L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
-                maxZoom: 20,
-                attribution: '© Google Maps'
-            }),
-            "Esri Mundo Topográfico": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
-                maxZoom: 20,
-                attribution: '© Esri & contributors'
-            }),
-            "Esri Mundo Imágenes": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                maxZoom: 20,
-                attribution: '© Esri & contributors'
-            })
-        };
-
-        baseMaps["OpenStreetMap"].addTo(map);
-        L.control.layers(baseMaps).addTo(map);
-
-        let bosquesLayer, cultivosLayer, chart, datosFincaSeleccionada = [], datosFincas = [];
+        let bosquesLayer, cultivosLayer, chart, datosFincas = [];
+        let highlightedLayers = [];
         const colorMap = {
             'bosque de galería': '#006400',
             'arroz': '#FFD700',
@@ -102,6 +75,228 @@
                             fillOpacity: 0
                         }
                     }).addTo(map);
+
+                    bosquesLayer.bringToBack();
+                })
+                .catch(error => console.error("Error al cargar la capa de bosques:", error));
+        }
+
+        function cargarCultivos() {
+            fetch("Cultivos.geojson")
+                .then(response => response.json())
+                .then(data => {
+                    cultivosLayer = L.geoJSON(data, {
+                        style: feature => ({
+                            color: colorMap[feature.properties.cultivo?.toLowerCase()] || 'gray',
+                            weight: 1,
+                            fillOpacity: 0.5
+                        }),
+                        onEachFeature: (feature, layer) => {
+                            const { cod_finca, nom_finca_, cultivo, has } = feature.properties;
+
+                            layer.bindPopup(`
+                                <b>Cultivo:</b> ${cultivo}<br>
+                                <b>Área:</b> ${parseFloat(has).toFixed(2)} ha<br>
+                                <b>Finca:</b> ${nom_finca_}
+                            `);
+
+                            datosFincas.push({
+                                Codigo: cod_finca,
+                                Finca: nom_finca_,
+                                Cultivo: cultivo,
+                                Hectareas: has
+                            });
+                        }
+                    }).addTo(map);
+
+                    cargarListaDesplegable();
+                })
+                .catch(error => console.error("Error al cargar la capa de cultivos:", error));
+        }
+
+        function cargarListaDesplegable() {
+            const select = document.getElementById("codigoFinca");
+            const fincas = [];
+
+            // Recopilar todas las fincas
+            datosFincas.forEach(finca => {
+                if (!fincas.find(f => f.codigo === finca.Codigo)) {
+                    fincas.push({
+                        codigo: finca.Codigo,
+                        nombre: finca.Finca
+                    });
+                }
+            });
+
+            // Ordenar las fincas alfabéticamente por código
+            fincas.sort((a, b) => a.codigo.localeCompare(b.codigo));
+
+            // Generar opciones en el select
+            fincas.forEach(finca => {
+                const option = document.createElement("option");
+                option.value = finca.codigo;
+                option.textContent = `${finca.codigo} (${finca.nombre})`;
+                select.appendChild(option);
+            });
+        }
+
+        function filtrarPorFinca() {
+            const codigoFinca = document.getElementById("codigoFinca").value;
+            const resumen = {};
+            let totalArea = 0;
+            let fincaBounds = L.latLngBounds();
+
+            cultivosLayer.eachLayer(layer => {
+                const { cod_finca, cultivo, has } = layer.feature.properties;
+
+                if (cod_finca === codigoFinca) {
+                    fincaBounds.extend(layer.getBounds());
+                    resumen[cultivo] = (resumen[cultivo] || 0) + parseFloat(has);
+                    totalArea += parseFloat(has);
+                }
+            });
+
+            if (fincaBounds.isValid()) {
+                map.fitBounds(fincaBounds);
+            }
+
+            mostrarResumen(resumen, totalArea);
+            generarGrafico(resumen, codigoFinca);
+        }
+
+        function mostrarResumen(resumen, totalArea) {
+            const summaryDiv = document.getElementById("summary");
+            summaryDiv.innerHTML = `<strong>Resumen</strong><br>`;
+            summaryDiv.innerHTML += `<b>Área Total:</b> ${totalArea.toFixed(2)} ha<br><br>`;
+
+            for (const cultivo in resumen) {
+                summaryDiv.innerHTML += `${cultivo}: ${resumen[cultivo].toFixed(2)} ha<br>`;
+            }
+        }
+
+        function generarGrafico(resumen, codigoFinca) {
+            const labels = Object.keys(resumen);
+            const data = Object.values(resumen);
+            const backgroundColors = labels.map(label => colorMap[label.toLowerCase()] || 'gray');
+
+            if (chart) chart.destroy();
+            const ctx = document.getElementById('chart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'pie',
+                data: { labels, datasets: [{ data, backgroundColor: backgroundColors }] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    onClick: (e, elements) => {
+                        if (elements.length > 0) {
+                            const index = elements[0].index;
+                            <!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geoportal con Selección de Mapas Base</title>
+    <!-- Estilos de Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <!-- Script de Leaflet -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <!-- Script de Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { margin: 0; padding: 0; font-family: Arial, sans-serif; display: flex; height: 100vh; }
+        #map { flex: 1; height: 100%; }
+        .sidebar {
+            width: 350px; padding: 15px; background-color: #f8f9fa; overflow-y: auto;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); border-right: 1px solid #ddd;
+        }
+        .logo { display: block; margin: 0 auto 15px; max-width: 100px; }
+        .filter, .summary, .chart-container { margin-bottom: 20px; }
+        .filter select { width: 100%; padding: 5px; margin-top: 5px; }
+        .summary, .chart-container { background: white; padding: 10px; border-radius: 5px; border: 1px solid #ddd; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <img src="CBS.png" alt="Logo" class="logo">
+        <div class="filter">
+            <label for="codigoFinca"><strong>Seleccionar Finca</strong></label>
+            <select id="codigoFinca" onchange="filtrarPorFinca()">
+                <option value="">Seleccione una finca</option>
+            </select>
+        </div>
+        <div id="summary" class="summary">
+            <strong>Resumen</strong>
+            <p>Seleccione una finca para ver los detalles.</p>
+        </div>
+        <div class="chart-container">
+            <canvas id="chart"></canvas>
+        </div>
+    </div>
+    <div id="map"></div>
+
+    <script>
+        const map = L.map('map').setView([5.5, -73.0], 6);
+
+        // Mapas base disponibles
+        const baseMaps = {
+            "OpenStreetMap": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '© OpenStreetMap contributors'
+            }),
+            "Google Satélite": L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+                maxZoom: 20,
+                attribution: '© Google Maps'
+            }),
+            "Google Híbrido": L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+                maxZoom: 20,
+                attribution: '© Google Maps'
+            }),
+            "Esri Mundo Topográfico": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 20,
+                attribution: '© Esri & contributors'
+            }),
+            "Esri Mundo Imágenes": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 20,
+                attribution: '© Esri & contributors'
+            })
+        };
+
+        // Agregar OpenStreetMap como mapa base inicial
+        baseMaps["OpenStreetMap"].addTo(map);
+
+        // Control de capas para cambiar mapas base
+        L.control.layers(baseMaps).addTo(map);
+
+        let bosquesLayer, cultivosLayer, chart, datosFincas = [];
+        let highlightedLayers = [];
+        const colorMap = {
+            'bosque de galería': '#006400',
+            'arroz': '#FFD700',
+            'pasto limpio': '#D2B48C',
+            'pasto arbolado': '#FF6347',
+            'pasto enmalezado': '#ADFF2F',
+            'palma aceite': '#CD853F',
+            'cacao': '#8B4513',
+            'maíz': '#FFD700',
+            'banano': '#228B22',
+            'plátano': '#32CD32',
+            'café': '#8B0000',
+            'papaya': '#FFA500',
+            'otros': '#FF0000'
+        };
+
+        function cargarBosques() {
+            fetch("Bosques.geojson")
+                .then(response => response.json())
+                .then(data => {
+                    bosquesLayer = L.geoJSON(data, {
+                        style: {
+                            color: "darkgreen",
+                            weight: 2,
+                            fillOpacity: 0
+                        }
+                    }).addTo(map);
+
                     bosquesLayer.bringToBack();
                 })
                 .catch(error => console.error("Error al cargar la capa de bosques:", error));
@@ -164,194 +359,82 @@
         }
 
         function filtrarPorFinca() {
-    const codigoFinca = document.getElementById("codigoFinca").value;
-    const resumen = {}; // Objeto para almacenar cultivos agrupados y sus áreas
-    datosFincaSeleccionada = [];
-    let totalArea = 0;
-    let fincaBounds = L.latLngBounds();
+            const codigoFinca = document.getElementById("codigoFinca").value;
+            const resumen = {};
+            let totalArea = 0;
+            let fincaBounds = L.latLngBounds();
 
-    cultivosLayer.eachLayer(layer => {
-        const { cod_finca, cultivo, has } = layer.feature.properties;
+            cultivosLayer.eachLayer(layer => {
+                const { cod_finca, cultivo, has } = layer.feature.properties;
 
-        if (cod_finca === codigoFinca) {
-            fincaBounds.extend(layer.getBounds());
-            
-            // Agrupar cultivos y sumar hectáreas
-            if (!resumen[cultivo]) {
-                resumen[cultivo] = 0;
-            }
-            resumen[cultivo] += parseFloat(has) || 0;
-
-            // Guardar detalles para exportar
-            datosFincaSeleccionada.push({
-                Codigo: cod_finca,
-                Cultivo: cultivo,
-                Hectareas: parseFloat(has).toFixed(2)
+                if (cod_finca === codigoFinca) {
+                    fincaBounds.extend(layer.getBounds());
+                    resumen[cultivo] = (resumen[cultivo] || 0) + parseFloat(has);
+                    totalArea += parseFloat(has);
+                }
             });
 
-            totalArea += parseFloat(has) || 0;
+            if (fincaBounds.isValid()) {
+                map.fitBounds(fincaBounds);
+            }
+
+            mostrarResumen(resumen, totalArea);
+            generarGrafico(resumen, codigoFinca);
         }
-    });
 
-    if (fincaBounds.isValid()) {
-        map.fitBounds(fincaBounds);
-    }
+        function mostrarResumen(resumen, totalArea) {
+            const summaryDiv = document.getElementById("summary");
+            summaryDiv.innerHTML = `<strong>Resumen</strong><br>`;
+            summaryDiv.innerHTML += `<b>Área Total:</b> ${totalArea.toFixed(2)} ha<br><br>`;
 
-    mostrarResumen(resumen, totalArea, codigoFinca);
-    generarGrafico(Object.entries(resumen).map(([cultivo, hectareas]) => ({ Cultivo: cultivo, Hectareas: hectareas })));
-}
-
-function mostrarResumen(resumen, totalArea, codigoFinca) {
-    const summaryDiv = document.getElementById("summary");
-    summaryDiv.innerHTML = `<strong>Resumen</strong><br>`;
-    summaryDiv.innerHTML += `<b>Finca:</b> ${codigoFinca}<br>`;
-    summaryDiv.innerHTML += `<b>Área Total:</b> ${totalArea.toFixed(2)} ha<br><br>`;
-
-    for (const [cultivo, hectareas] of Object.entries(resumen)) {
-        summaryDiv.innerHTML += `${cultivo}: ${hectareas.toFixed(2)} ha<br>`;
-    }
-}
-
-function generarGrafico(resumen) {
-    const labels = resumen.map(item => item.Cultivo);
-    const data = resumen.map(item => parseFloat(item.Hectareas));
-    const backgroundColors = labels.map(label => colorMap[label.toLowerCase()] || 'gray');
-
-    if (chart) chart.destroy();
-    const ctx = document.getElementById('chart').getContext('2d');
-    chart = new Chart(ctx, {
-        type: 'pie',
-        data: {
-            labels: labels,
-            datasets: [{
-                data: data,
-                backgroundColor: backgroundColors
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            onClick: (e, elements) => {
-                if (elements.length > 0) {
-                    const index = elements[0].index;
-                    const selectedCultivo = labels[index];
-                    resaltarCultivoEnMapa(selectedCultivo);
-                }
+            for (const cultivo in resumen) {
+                summaryDiv.innerHTML += `${cultivo}: ${resumen[cultivo].toFixed(2)} ha<br>`;
             }
         }
-    });
-}
 
+        function generarGrafico(resumen, codigoFinca) {
+            const labels = Object.keys(resumen);
+            const data = Object.values(resumen);
+            const backgroundColors = labels.map(label => colorMap[label.toLowerCase()] || 'gray');
 
-        function resaltarCultivoEnMapa(cultivo) {
+            if (chart) chart.destroy();
+            const ctx = document.getElementById('chart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'pie',
+                data: { labels, datasets: [{ data, backgroundColor: backgroundColors }] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    onClick: (e, elements) => {
+                        if (elements.length > 0) {
+                            const index = elements[0].index;
+                           
+const selectedCultivo = labels[index];
+                            resaltarCultivoEnMapa(selectedCultivo, codigoFinca);
+                        }
+                    }
+                }
+            });
+        }
+
+        function resaltarCultivoEnMapa(cultivo, codigoFinca) {
+            highlightedLayers.forEach(layer => cultivosLayer.resetStyle(layer));
+            highlightedLayers = [];
+
             cultivosLayer.eachLayer(layer => {
-                const { cultivo: layerCultivo } = layer.feature.properties;
+                const { cod_finca, cultivo: layerCultivo } = layer.feature.properties;
 
-                if (layerCultivo?.toLowerCase() === cultivo.toLowerCase()) {
+                if (layerCultivo?.toLowerCase() === cultivo.toLowerCase() && cod_finca === codigoFinca) {
                     layer.setStyle({ color: 'yellow', weight: 3 });
-                } else {
-                    cultivosLayer.resetStyle(layer);
+                    highlightedLayers.push(layer);
                 }
             });
 
             setTimeout(() => {
-                cultivosLayer.eachLayer(layer => cultivosLayer.resetStyle(layer));
+                highlightedLayers.forEach(layer => cultivosLayer.resetStyle(layer));
+                highlightedLayers = [];
             }, 2000);
         }
-
-        function exportarDatos() {
-            if (datosFincaSeleccionada.length === 0) {
-                alert("Por favor, seleccione una finca primero.");
-                return;
-            }
-
-            const ws = XLSX.utils.json_to_sheet(datosFincaSeleccionada);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Datos Finca");
-            XLSX.writeFile(wb, "Datos_Finca_Seleccionada.xlsx");
-        }
-<script>
-    function filtrarPorFinca() {
-        const codigoFinca = document.getElementById("codigoFinca").value;
-        const resumen = {};
-        datosFincaSeleccionada = [];
-        let totalArea = 0;
-        let fincaBounds = L.latLngBounds();
-
-        cultivosLayer.eachLayer(layer => {
-            const { cod_finca, cultivo, has } = layer.feature.properties;
-
-            if (cod_finca === codigoFinca) {
-                fincaBounds.extend(layer.getBounds());
-                // Agrupar cultivos y sumar áreas
-                if (!resumen[cultivo]) {
-                    resumen[cultivo] = 0;
-                }
-                resumen[cultivo] += parseFloat(has) || 0;
-
-                // Almacenar datos detallados para exportación
-                datosFincaSeleccionada.push({
-                    Codigo: cod_finca,
-                    Cultivo: cultivo,
-                    Hectareas: parseFloat(has).toFixed(2)
-                });
-
-                totalArea += parseFloat(has) || 0;
-            }
-        });
-
-        if (fincaBounds.isValid()) {
-            map.fitBounds(fincaBounds);
-        }
-
-        mostrarResumen(resumen, totalArea, codigoFinca);
-        generarGrafico(Object.entries(resumen).map(([cultivo, hectareas]) => ({ Cultivo: cultivo, Hectareas: hectareas })));
-    }
-
-    function mostrarResumen(resumen, totalArea, codigoFinca) {
-        const summaryDiv = document.getElementById("summary");
-        summaryDiv.innerHTML = `<strong>Resumen</strong><br>`;
-        summaryDiv.innerHTML += `<b>Finca:</b> ${codigoFinca}<br>`;
-        summaryDiv.innerHTML += `<b>Área Total:</b> ${totalArea.toFixed(2)} ha<br><br>`;
-        
-        for (const [cultivo, hectareas] of Object.entries(resumen)) {
-            summaryDiv.innerHTML += `${cultivo}: ${hectareas.toFixed(2)} ha<br>`;
-        }
-    }
-
-    function generarGrafico(resumen) {
-        const labels = resumen.map(item => item.Cultivo);
-        const data = resumen.map(item => parseFloat(item.Hectareas));
-        const backgroundColors = labels.map(label => colorMap[label.toLowerCase()] || 'gray');
-
-        if (chart) chart.destroy();
-        const ctx = document.getElementById('chart').getContext('2d');
-        chart = new Chart(ctx, {
-            type: 'pie',
-            data: {
-                labels: labels,
-                datasets: [{
-                    data: data,
-                    backgroundColor: backgroundColors
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                onClick: (e, elements) => {
-                    if (elements.length > 0) {
-                        const index = elements[0].index;
-                        const selectedCultivo = labels[index];
-                        resaltarCultivoEnMapa(selectedCultivo);
-                    }
-                }
-            }
-        });
-    }
-
-    cargarBosques();
-    cargarCultivos();
-</script>
 
         cargarBosques();
         cargarCultivos();
