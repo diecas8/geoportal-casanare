@@ -1,193 +1,67 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Geoportal con Gráfico Interactivo</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <style>
-        body { margin: 0; padding: 0; font-family: Arial, sans-serif; display: flex; flex-wrap: nowrap; height: 100vh; }
-        #map { flex: 1 1 65%; min-width: 300px; height: 100%; }
-        .sidebar { flex: 1 1 35%; min-width: 300px; padding: 10px; background-color: #f8f9fa; height: 100%; overflow-y: auto; box-shadow: 0 0 5px rgba(0,0,0,0.2); }
-        .logo { width: 100px; display: block; margin: 10px auto; }
-        .filter { margin-bottom: 20px; }
-        .summary { margin-top: 20px; background-color: white; padding: 10px; border: 1px solid #ddd; border-radius: 5px; }
-        .chart-container { width: 100%; height: 250px; margin-top: 20px; }
-        .download-btn { margin-top: 20px; padding: 10px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%; }
-        .download-btn:hover { background-color: #0056b3; }
-    </style>
-</head>
-<body>
-    <div class="sidebar">
-        <img src="CBS.png" class="logo" alt="Logo">
-        <div class="filter">
-            <strong>Seleccionar Finca</strong><br>
-            <select id="codigoFinca" onchange="filtrarPorFinca()">
-                <option value="">Seleccione una finca</option>
-            </select>
-        </div>
-        <div id="summary" class="summary">
-            <strong>Resumen de la Finca</strong><br>
-            Seleccione una finca para ver los detalles.
-        </div>
-        <div class="chart-container">
-            <canvas id="chart"></canvas>
-        </div>
-        <button class="download-btn" onclick="descargarDatos()">Descargar Datos en Excel</button>
-    </div>
-    <div id="map"></div>
+<script>
+    fetch("Cultivos.geojson")
+        .then(response => response.ok ? response.json() : Promise.reject("No se pudo cargar el archivo GeoJSON de cultivos."))
+        .then(data => {
+            usosLayer = L.geoJSON(data, {
+                style: estiloUsos,
+                onEachFeature: (feature, layer) => {
+                    const { cod_finca, nom_finca_, propietari, cultivo, has } = feature.properties;
 
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script>
-        const map = L.map('map').setView([5.5, -73.0], 6);
-        let usosLayer, rutasLayer, fincasLayer, chart, datosFincas = [];
-        let highlightedLayer = null;
+                    // Usar el campo `propietari` para mostrar el nombre del propietario
+                    layer.bindPopup(`
+                        <b>Cultivo:</b> ${cultivo}<br>
+                        <b>Área:</b> ${parseFloat(has).toLocaleString('es-ES', { minimumFractionDigits: 2 })} ha<br>
+                        <b>Propietario:</b> ${propietari || 'Sin información'}
+                    `);
 
-        // Capas base
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
-
-        const colorMap = {
-            'bosque de galería': '#006400',
-            'arroz': '#FFD700',
-            'pasto limpio': '#D2B48C',
-            'pasto arbolado': '#FF6347',
-            'pasto enmalezado': '#ADFF2F',
-            'palma aceite': '#CD853F',
-            'cacao': '#8B4513',
-            'maíz': '#FFD700',
-            'banano': '#228B22',
-            'plátano': '#32CD32',
-            'café': '#8B0000',
-            'papaya': '#FFA500',
-            'otros': '#FF0000'
-        };
-
-        function estiloUsos(feature) {
-            const cultivo = feature.properties.cultivo?.trim().toLowerCase();
-            const color = colorMap[cultivo] || 'gray';
-            return { color: color, fillOpacity: 0.5, weight: 1 };
-        }
-
-        function cargarListaDesplegable(capa) {
-            const select = document.getElementById("codigoFinca");
-            const fincas = [];
-
-            capa.eachLayer(layer => {
-                const { cod_finca, nom_finca_ } = layer.feature.properties;
-                if (cod_finca && !fincas.find(f => f.codigo === cod_finca)) {
-                    fincas.push({ codigo: cod_finca.trim(), nombre: nom_finca_.trim() });
+                    datosFincas.push({
+                        Codigo: cod_finca,
+                        Finca: nom_finca_,
+                        Propietario: propietari || "Sin información",
+                        Cultivo: cultivo,
+                        Hectareas: has
+                    });
                 }
-            });
+            }).addTo(map);
+            cargarListaDesplegable(usosLayer);
+        })
+        .catch(error => alert(error));
 
-            fincas.sort((a, b) => a.codigo.localeCompare(b.codigo));
-            fincas.forEach(finca => {
-                const option = document.createElement("option");
-                option.value = finca.codigo;
-                option.textContent = `${finca.codigo} (${finca.nombre})`;
-                select.appendChild(option);
-            });
+    function filtrarPorFinca() {
+        const codigoFinca = document.getElementById("codigoFinca").value;
+        if (!codigoFinca) {
+            alert("Seleccione una finca.");
+            return;
         }
 
-        fetch("Cultivos.geojson")
-            .then(response => response.ok ? response.json() : Promise.reject("No se pudo cargar el archivo GeoJSON de cultivos."))
-            .then(data => {
-                usosLayer = L.geoJSON(data, {
-                    style: estiloUsos,
-                    onEachFeature: (feature, layer) => {
-                        const { cod_finca, nom_finca_, prop, cultivo, has } = feature.properties;
-                        const areaFormatted = parseFloat(has).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                        layer.bindPopup(`Cultivo: ${cultivo}<br>Área: ${areaFormatted} ha<br>Productor: ${prop}`);
+        let resumen = {}, totalArea = 0, propietario = "", nombreFinca = "", fincaBounds = L.latLngBounds();
 
-                        datosFincas.push({ Codigo: cod_finca, Finca: nom_finca_, Propietario: prop, Cultivo: cultivo, Hectareas: has });
-                    }
-                }).addTo(map);
-                cargarListaDesplegable(usosLayer);
-            })
-            .catch(error => alert(error));
-
-        function generarGrafico(resumen) {
-            const labels = [], data = [], backgroundColors = [];
-            for (let cultivo in resumen) {
-                labels.push(cultivo);
-                data.push(resumen[cultivo]);
-                backgroundColors.push(colorMap[cultivo.toLowerCase()] || 'gray');
+        usosLayer.eachLayer(layer => {
+            const { cod_finca, cultivo, has, propietari, nom_finca_ } = layer.feature.properties;
+            if (cod_finca?.trim() === codigoFinca) {
+                fincaBounds.extend(layer.getBounds());
+                resumen[cultivo] = (resumen[cultivo] || 0) + parseFloat(has);
+                totalArea += parseFloat(has);
+                propietario = propietari || propietario;
+                nombreFinca = nom_finca_ || nombreFinca;
             }
+        });
 
-            if (chart) chart.destroy();
-            const ctx = document.getElementById('chart').getContext('2d');
-            chart = new Chart(ctx, {
-                type: 'pie',
-                data: { labels, datasets: [{ data, backgroundColor: backgroundColors }] },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    onClick: (e, elements) => {
-                        if (elements.length > 0) {
-                            const index = elements[0].index;
-                            const selectedCultivo = labels[index];
-                            resaltarCultivoEnMapa(selectedCultivo);
-                        }
-                    }
-                }
-            });
+        if (fincaBounds.isValid()) map.fitBounds(fincaBounds);
+        else return alert("No se encontraron datos para esta finca.");
+
+        const summaryDiv = document.getElementById("summary");
+        summaryDiv.innerHTML = `
+            <strong>Resumen de Cultivos para Finca ${codigoFinca}</strong><br>
+            <b>Propietario:</b> ${propietario}<br>
+            <b>Nombre de la Finca:</b> ${nombreFinca}<br>
+            <b>Área Total:</b> ${totalArea.toFixed(2)} ha<br><br>
+        `;
+
+        for (let cultivo in resumen) {
+            summaryDiv.innerHTML += `${cultivo}: ${resumen[cultivo].toFixed(2)} ha<br>`;
         }
 
-        function filtrarPorFinca() {
-            const codigoFinca = document.getElementById("codigoFinca").value;
-            if (!codigoFinca) {
-                alert("Seleccione una finca.");
-                return;
-            }
-
-            let resumen = {}, totalArea = 0, propietario = "", nombreFinca = "", fincaBounds = L.latLngBounds();
-
-            usosLayer.eachLayer(layer => {
-                const { cod_finca, cultivo, has, prop, nom_finca_ } = layer.feature.properties;
-                if (cod_finca?.trim() === codigoFinca) {
-                    fincaBounds.extend(layer.getBounds());
-                    resumen[cultivo] = (resumen[cultivo] || 0) + parseFloat(has);
-                    totalArea += parseFloat(has);
-                    propietario = prop || propietario;
-                    nombreFinca = nom_finca_ || nombreFinca;
-                }
-            });
-
-            if (fincaBounds.isValid()) map.fitBounds(fincaBounds);
-            else return alert("No se encontraron datos para esta finca.");
-
-            const summaryDiv = document.getElementById("summary");
-            summaryDiv.innerHTML = `<strong>Resumen de Cultivos para Finca ${codigoFinca}</strong><br>`;
-            summaryDiv.innerHTML += `Propietario: ${propietario}<br>Nombre de la Finca: ${nombreFinca}<br>`;
-            summaryDiv.innerHTML += `Área Total: ${totalArea.toFixed(2)} ha<br><br>`;
-
-            for (let cultivo in resumen) {
-                summaryDiv.innerHTML += `${cultivo}: ${resumen[cultivo].toFixed(2)} ha<br>`;
-            }
-
-            generarGrafico(resumen);
-        }
-
-        function resaltarCultivoEnMapa(cultivo) {
-            if (highlightedLayer) {
-                usosLayer.resetStyle(highlightedLayer);
-                highlightedLayer = null;
-            }
-
-            usosLayer.eachLayer(layer => {
-                if (layer.feature.properties.cultivo?.trim().toLowerCase() === cultivo.toLowerCase()) {
-                    layer.setStyle({ color: 'yellow', weight: 3 });
-                    highlightedLayer = layer;
-                }
-            });
-        }
-
-        function descargarDatos() {
-            const ws = XLSX.utils.json_to_sheet(datosFincas);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Datos Fincas");
-            XLSX.writeFile(wb, "datos_fincas.xlsx");
-        }
-    </script>
-</body>
-</html>
+        generarGrafico(resumen, codigoFinca);
+    }
+</script>
