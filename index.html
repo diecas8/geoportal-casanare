@@ -205,8 +205,4 @@
 
         // Resaltar cultivos en el mapa
         function resaltarCultivoEnMapa(cultivo, codigoFinca) {
-            highlightedLayers.forEach(layer => cultivosLayer.resetStyle(layer));
-            highlightedLayers = [];
-
-            cultivosLayer.eachLayer(layer => {
-                const { cod_finca, cultivo: layerCultivo } = layer
+            highlightedLayers.forEach(layer => cult
