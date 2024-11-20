@@ -114,31 +114,34 @@
                 .catch(error => console.error("Error al cargar la capa de cultivos:", error));
         }
 
-        function cargarListaDesplegable() {
-            const select = document.getElementById("codigoFinca");
-            const fincas = [];
+      function cargarListaDesplegable() {
+    const select = document.getElementById("codigoFinca");
 
-            // Recopilar todas las fincas
-            datosFincas.forEach(finca => {
-                if (!fincas.find(f => f.codigo === finca.Codigo)) {
-                    fincas.push({
-                        codigo: finca.Codigo,
-                        nombre: finca.Finca
-                    });
-                }
-            });
+    // Vaciar las opciones existentes
+    select.innerHTML = `<option value="">Seleccione una finca</option>`;
 
-            // Ordenar las fincas alfabéticamente por código
-            fincas.sort((a, b) => a.codigo.localeCompare(b.codigo));
+    const fincas = [];
 
-            // Generar opciones en el select
-            fincas.forEach(finca => {
-                const option = document.createElement("option");
-                option.value = finca.codigo;
-                option.textContent = `${finca.codigo} (${finca.nombre})`;
-                select.appendChild(option);
+    datosFincas.forEach(finca => {
+        if (!fincas.find(f => f.codigo === finca.Codigo)) {
+            fincas.push({
+                codigo: finca.Codigo,
+                nombre: finca.Finca
             });
         }
+    });
+
+    // Ordenar las fincas alfabéticamente por código
+    fincas.sort((a, b) => a.codigo.localeCompare(b.codigo));
+
+    // Generar opciones en el select
+    fincas.forEach(finca => {
+        const option = document.createElement("option");
+        option.value = finca.codigo;
+        option.textContent = `${finca.codigo} (${finca.nombre})`;
+        select.appendChild(option);
+    });
+}
 
         function filtrarPorFinca() {
             const codigoFinca = document.getElementById("codigoFinca").value;
