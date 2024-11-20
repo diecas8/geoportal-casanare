@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Geoportal con Interacción</title>
+    <title>Geoportal con Resumen Ampliado</title>
     <!-- Estilos de Leaflet -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <!-- Script de Leaflet -->
@@ -94,20 +94,22 @@
                             fillOpacity: 0.5
                         }),
                         onEachFeature: (feature, layer) => {
-                            const { cod_finca, nom_finca_, cultivo, has } = feature.properties;
+                            const { cod_finca, nom_finca_, cultivo, has, productor } = feature.properties;
 
                             // Agregar popup y almacenar datos
                             layer.bindPopup(`
                                 <b>Cultivo:</b> ${cultivo}<br>
                                 <b>Área:</b> ${parseFloat(has).toFixed(2)} ha<br>
-                                <b>Finca:</b> ${nom_finca_}
+                                <b>Finca:</b> ${nom_finca_}<br>
+                                <b>Productor:</b> ${productor || "Desconocido"}
                             `);
 
                             datosFincas.push({
                                 Codigo: cod_finca,
                                 Finca: nom_finca_,
                                 Cultivo: cultivo,
-                                Hectareas: has
+                                Hectareas: has,
+                                Productor: productor || "Desconocido"
                             });
                         }
                     }).addTo(map);
@@ -139,14 +141,18 @@
             const resumen = {};
             let totalArea = 0;
             let fincaBounds = L.latLngBounds();
+            let fincaNombre = "";
+            let productorNombre = "";
 
             cultivosLayer.eachLayer(layer => {
-                const { cod_finca, cultivo, has } = layer.feature.properties;
+                const { cod_finca, cultivo, has, nom_finca_, productor } = layer.feature.properties;
 
                 if (cod_finca === codigoFinca) {
                     fincaBounds.extend(layer.getBounds());
                     resumen[cultivo] = (resumen[cultivo] || 0) + parseFloat(has);
                     totalArea += parseFloat(has);
+                    fincaNombre = nom_finca_;
+                    productorNombre = productor || "Desconocido";
                 }
             });
 
@@ -154,14 +160,17 @@
                 map.fitBounds(fincaBounds);
             }
 
-            mostrarResumen(resumen, totalArea);
+            mostrarResumen(resumen, totalArea, codigoFinca, fincaNombre, productorNombre);
             generarGrafico(resumen, codigoFinca);
         }
 
         // Mostrar el resumen de la finca seleccionada
-        function mostrarResumen(resumen, totalArea) {
+        function mostrarResumen(resumen, totalArea, codigoFinca, fincaNombre, productorNombre) {
             const summaryDiv = document.getElementById("summary");
             summaryDiv.innerHTML = `<strong>Resumen</strong><br>`;
+            summaryDiv.innerHTML += `<b>Código de Finca:</b> ${codigoFinca}<br>`;
+            summaryDiv.innerHTML += `<b>Nombre de Finca:</b> ${fincaNombre}<br>`;
+            summaryDiv.innerHTML += `<b>Productor:</b> ${productorNombre}<br>`;
             summaryDiv.innerHTML += `<b>Área Total:</b> ${totalArea.toFixed(2)} ha<br><br>`;
 
             for (const cultivo in resumen) {
@@ -196,29 +205,8 @@
 
         // Resaltar cultivos en el mapa
         function resaltarCultivoEnMapa(cultivo, codigoFinca) {
-            // Limpiar resaltados previos
             highlightedLayers.forEach(layer => cultivosLayer.resetStyle(layer));
             highlightedLayers = [];
 
             cultivosLayer.eachLayer(layer => {
-                const { cod_finca, cultivo: layerCultivo } = layer.feature.properties;
-
-                if (layerCultivo?.toLowerCase() === cultivo.toLowerCase() && cod_finca === codigoFinca) {
-                    layer.setStyle({ color: 'yellow', weight: 3 });
-                    highlightedLayers.push(layer);
-                }
-            });
-
-            // Restaurar estilos después de 2 segundos
-            setTimeout(() => {
-                highlightedLayers.forEach(layer => cultivosLayer.resetStyle(layer));
-                highlightedLayers = [];
-            }, 2000);
-        }
-
-        // Cargar las capas al iniciar
-        cargarBosques();
-        cargarCultivos();
-    </script>
-</body>
-</html>
+                const { cod_finca, cultivo: layerCultivo } = layer
