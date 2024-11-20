@@ -260,6 +260,88 @@
             XLSX.utils.book_append_sheet(wb, ws, "Datos Finca");
             XLSX.writeFile(wb, "Datos_Finca_Seleccionada.xlsx");
         }
+<script>
+    function filtrarPorFinca() {
+        const codigoFinca = document.getElementById("codigoFinca").value;
+        const resumen = {};
+        datosFincaSeleccionada = [];
+        let totalArea = 0;
+        let fincaBounds = L.latLngBounds();
+
+        cultivosLayer.eachLayer(layer => {
+            const { cod_finca, cultivo, has } = layer.feature.properties;
+
+            if (cod_finca === codigoFinca) {
+                fincaBounds.extend(layer.getBounds());
+                // Agrupar cultivos y sumar áreas
+                if (!resumen[cultivo]) {
+                    resumen[cultivo] = 0;
+                }
+                resumen[cultivo] += parseFloat(has) || 0;
+
+                // Almacenar datos detallados para exportación
+                datosFincaSeleccionada.push({
+                    Codigo: cod_finca,
+                    Cultivo: cultivo,
+                    Hectareas: parseFloat(has).toFixed(2)
+                });
+
+                totalArea += parseFloat(has) || 0;
+            }
+        });
+
+        if (fincaBounds.isValid()) {
+            map.fitBounds(fincaBounds);
+        }
+
+        mostrarResumen(resumen, totalArea, codigoFinca);
+        generarGrafico(Object.entries(resumen).map(([cultivo, hectareas]) => ({ Cultivo: cultivo, Hectareas: hectareas })));
+    }
+
+    function mostrarResumen(resumen, totalArea, codigoFinca) {
+        const summaryDiv = document.getElementById("summary");
+        summaryDiv.innerHTML = `<strong>Resumen</strong><br>`;
+        summaryDiv.innerHTML += `<b>Finca:</b> ${codigoFinca}<br>`;
+        summaryDiv.innerHTML += `<b>Área Total:</b> ${totalArea.toFixed(2)} ha<br><br>`;
+        
+        for (const [cultivo, hectareas] of Object.entries(resumen)) {
+            summaryDiv.innerHTML += `${cultivo}: ${hectareas.toFixed(2)} ha<br>`;
+        }
+    }
+
+    function generarGrafico(resumen) {
+        const labels = resumen.map(item => item.Cultivo);
+        const data = resumen.map(item => parseFloat(item.Hectareas));
+        const backgroundColors = labels.map(label => colorMap[label.toLowerCase()] || 'gray');
+
+        if (chart) chart.destroy();
+        const ctx = document.getElementById('chart').getContext('2d');
+        chart = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: data,
+                    backgroundColor: backgroundColors
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                onClick: (e, elements) => {
+                    if (elements.length > 0) {
+                        const index = elements[0].index;
+                        const selectedCultivo = labels[index];
+                        resaltarCultivoEnMapa(selectedCultivo);
+                    }
+                }
+            }
+        });
+    }
+
+    cargarBosques();
+    cargarCultivos();
+</script>
 
         cargarBosques();
         cargarCultivos();
