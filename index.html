@@ -64,6 +64,7 @@
             'otros': '#FF0000'
         };
 
+        // Cargar y agregar la capa de bosques
         function cargarBosques() {
             fetch("Bosques.geojson")
                 .then(response => response.json())
@@ -81,6 +82,7 @@
                 .catch(error => console.error("Error al cargar la capa de bosques:", error));
         }
 
+        // Cargar y agregar la capa de cultivos
         function cargarCultivos() {
             fetch("Cultivos.geojson")
                 .then(response => response.json())
@@ -94,6 +96,7 @@
                         onEachFeature: (feature, layer) => {
                             const { cod_finca, nom_finca_, cultivo, has, productor } = feature.properties;
 
+                            // Agregar popup y almacenar datos
                             layer.bindPopup(`
                                 <b>Cultivo:</b> ${cultivo}<br>
                                 <b>Área:</b> ${parseFloat(has).toFixed(2)} ha<br>
@@ -116,6 +119,7 @@
                 .catch(error => console.error("Error al cargar la capa de cultivos:", error));
         }
 
+        // Llenar el filtro de selección de finca
         function cargarListaDesplegable() {
             const select = document.getElementById("codigoFinca");
             const fincas = new Set();
@@ -131,6 +135,7 @@
             });
         }
 
+        // Filtrar por finca y centrar el mapa
         function filtrarPorFinca() {
             const codigoFinca = document.getElementById("codigoFinca").value;
             const resumen = {};
@@ -159,6 +164,7 @@
             generarGrafico(resumen, codigoFinca);
         }
 
+        // Mostrar el resumen de la finca seleccionada
         function mostrarResumen(resumen, totalArea, codigoFinca, fincaNombre, productorNombre) {
             const summaryDiv = document.getElementById("summary");
             summaryDiv.innerHTML = `<strong>Resumen</strong><br>`;
@@ -172,6 +178,7 @@
             }
         }
 
+        // Generar gráfico de torta y agregar interacción
         function generarGrafico(resumen, codigoFinca) {
             const labels = Object.keys(resumen);
             const data = Object.values(resumen);
@@ -196,17 +203,10 @@
             });
         }
 
+        // Resaltar cultivos en el mapa
         function resaltarCultivoEnMapa(cultivo, codigoFinca) {
             highlightedLayers.forEach(layer => cultivosLayer.resetStyle(layer));
             highlightedLayers = [];
 
             cultivosLayer.eachLayer(layer => {
-                const { cod_finca, cultivo: layerCultivo } = layer.feature.properties;
-
-                if (layerCultivo?.toLowerCase() === cultivo.toLowerCase() && cod_finca === codigoFinca) {
-                    layer.setStyle({ color: 'yellow', weight: 3 });
-                    highlightedLayers.push(layer);
-                }
-            });
-
-           
+                const { cod_finca, cultivo: layerCultivo } = layer
