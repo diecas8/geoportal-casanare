@@ -1,67 +1,168 @@
-<script>
-    fetch("Cultivos.geojson")
-        .then(response => response.ok ? response.json() : Promise.reject("No se pudo cargar el archivo GeoJSON de cultivos."))
-        .then(data => {
-            usosLayer = L.geoJSON(data, {
-                style: estiloUsos,
-                onEachFeature: (feature, layer) => {
-                    const { cod_finca, nom_finca_, propietari, cultivo, has } = feature.properties;
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geoportal Mejorado</title>
+    <!-- Estilos de Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <!-- Script de Leaflet -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <!-- Script de Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Script para exportar a Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body { margin: 0; padding: 0; font-family: Arial, sans-serif; display: flex; height: 100vh; }
+        #map { flex: 1; height: 100%; }
+        .sidebar {
+            width: 350px; padding: 15px; background-color: #f8f9fa; overflow-y: auto;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); border-right: 1px solid #ddd;
+        }
+        .logo { display: block; margin: 0 auto 15px; max-width: 100px; }
+        .filter, .summary, .chart-container { margin-bottom: 20px; }
+        .summary, .chart-container { background: white; padding: 10px; border-radius: 5px; border: 1px solid #ddd; }
+        .download-btn {
+            width: 100%; padding: 10px; background-color: #007bff; color: white; border: none;
+            border-radius: 5px; font-size: 16px; cursor: pointer;
+        }
+        .download-btn:hover { background-color: #0056b3; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <img src="CBS.png" alt="Logo" class="logo">
+        <div class="filter">
+            <label for="codigoFinca"><strong>Seleccionar Finca</strong></label>
+            <select id="codigoFinca" onchange="filtrarPorFinca()" style="width: 100%; padding: 5px; margin-top: 5px;">
+                <option value="">Seleccione una finca</option>
+            </select>
+        </div>
+        <div id="summary" class="summary">
+            <strong>Resumen de la Finca</strong>
+            <p>Seleccione una finca para ver los detalles.</p>
+        </div>
+        <div class="chart-container">
+            <canvas id="chart"></canvas>
+        </div>
+        <button class="download-btn" onclick="descargarDatos()">Descargar Datos en Excel</button>
+    </div>
+    <div id="map"></div>
 
-                    // Usar el campo `propietari` para mostrar el nombre del propietario
-                    layer.bindPopup(`
-                        <b>Cultivo:</b> ${cultivo}<br>
-                        <b>Área:</b> ${parseFloat(has).toLocaleString('es-ES', { minimumFractionDigits: 2 })} ha<br>
-                        <b>Propietario:</b> ${propietari || 'Sin información'}
-                    `);
+    <script>
+        // Configuración inicial del mapa
+        const map = L.map('map').setView([5.5, -73.0], 6);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
 
-                    datosFincas.push({
-                        Codigo: cod_finca,
-                        Finca: nom_finca_,
-                        Propietario: propietari || "Sin información",
-                        Cultivo: cultivo,
-                        Hectareas: has
-                    });
+        let usosLayer, chart, datosFincas = [];
+        const colorMap = {
+            'bosque de galería': '#006400',
+            'arroz': '#FFD700',
+            'pasto limpio': '#D2B48C',
+            'pasto arbolado': '#FF6347',
+            'pasto enmalezado': '#ADFF2F',
+            'palma aceite': '#CD853F',
+            'cacao': '#8B4513',
+            'maíz': '#FFD700',
+            'banano': '#228B22',
+            'plátano': '#32CD32',
+            'café': '#8B0000',
+            'papaya': '#FFA500',
+            'otros': '#FF0000'
+        };
+
+        // Cargar GeoJSON de cultivos
+        fetch("Cultivos.geojson")
+            .then(response => response.ok ? response.json() : Promise.reject("Error al cargar el archivo GeoJSON"))
+            .then(data => {
+                usosLayer = L.geoJSON(data, {
+                    style: feature => ({ color: colorMap[feature.properties.cultivo?.toLowerCase()] || 'gray', fillOpacity: 0.5, weight: 1 }),
+                    onEachFeature: (feature, layer) => {
+                        const { cod_finca, nom_finca_, propietari, cultivo, has } = feature.properties;
+                        layer.bindPopup(`
+                            <b>Cultivo:</b> ${cultivo}<br>
+                            <b>Área:</b> ${parseFloat(has).toLocaleString('es-ES', { minimumFractionDigits: 2 })} ha<br>
+                            <b>Propietario:</b> ${propietari || "Sin información"}
+                        `);
+                        datosFincas.push({ Codigo: cod_finca, Finca: nom_finca_, Propietario: propietari || "Sin información", Cultivo: cultivo, Hectareas: has });
+                    }
+                }).addTo(map);
+                cargarListaDesplegable(usosLayer);
+            })
+            .catch(error => alert(error));
+
+        // Cargar opciones en el desplegable
+        function cargarListaDesplegable(layer) {
+            const select = document.getElementById("codigoFinca");
+            const fincas = new Set();
+            layer.eachLayer(l => {
+                const { cod_finca, nom_finca_ } = l.feature.properties;
+                if (!fincas.has(cod_finca)) {
+                    const option = document.createElement("option");
+                    option.value = cod_finca;
+                    option.textContent = `${cod_finca} (${nom_finca_})`;
+                    select.appendChild(option);
+                    fincas.add(cod_finca);
                 }
-            }).addTo(map);
-            cargarListaDesplegable(usosLayer);
-        })
-        .catch(error => alert(error));
-
-    function filtrarPorFinca() {
-        const codigoFinca = document.getElementById("codigoFinca").value;
-        if (!codigoFinca) {
-            alert("Seleccione una finca.");
-            return;
+            });
         }
 
-        let resumen = {}, totalArea = 0, propietario = "", nombreFinca = "", fincaBounds = L.latLngBounds();
-
-        usosLayer.eachLayer(layer => {
-            const { cod_finca, cultivo, has, propietari, nom_finca_ } = layer.feature.properties;
-            if (cod_finca?.trim() === codigoFinca) {
-                fincaBounds.extend(layer.getBounds());
-                resumen[cultivo] = (resumen[cultivo] || 0) + parseFloat(has);
-                totalArea += parseFloat(has);
-                propietario = propietari || propietario;
-                nombreFinca = nom_finca_ || nombreFinca;
+        // Filtrar y mostrar información por finca
+        function filtrarPorFinca() {
+            const codigoFinca = document.getElementById("codigoFinca").value;
+            if (!codigoFinca) {
+                alert("Seleccione una finca.");
+                return;
             }
-        });
 
-        if (fincaBounds.isValid()) map.fitBounds(fincaBounds);
-        else return alert("No se encontraron datos para esta finca.");
+            const resumen = {};
+            let totalArea = 0, propietario = "", nombreFinca = "";
+            usosLayer.eachLayer(layer => {
+                const { cod_finca, cultivo, has, propietari, nom_finca_ } = layer.feature.properties;
+                if (cod_finca === codigoFinca) {
+                    resumen[cultivo] = (resumen[cultivo] || 0) + parseFloat(has);
+                    totalArea += parseFloat(has);
+                    propietario = propietari || propietario;
+                    nombreFinca = nom_finca_ || nombreFinca;
+                }
+            });
 
-        const summaryDiv = document.getElementById("summary");
-        summaryDiv.innerHTML = `
-            <strong>Resumen de Cultivos para Finca ${codigoFinca}</strong><br>
-            <b>Propietario:</b> ${propietario}<br>
-            <b>Nombre de la Finca:</b> ${nombreFinca}<br>
-            <b>Área Total:</b> ${totalArea.toFixed(2)} ha<br><br>
-        `;
+            const summaryDiv = document.getElementById("summary");
+            summaryDiv.innerHTML = `
+                <strong>Resumen de Cultivos para Finca ${codigoFinca}</strong><br>
+                <b>Propietario:</b> ${propietario}<br>
+                <b>Nombre de la Finca:</b> ${nombreFinca}<br>
+                <b>Área Total:</b> ${totalArea.toFixed(2)} ha<br><br>
+            `;
+            for (const cultivo in resumen) {
+                summaryDiv.innerHTML += `${cultivo}: ${resumen[cultivo].toFixed(2)} ha<br>`;
+            }
 
-        for (let cultivo in resumen) {
-            summaryDiv.innerHTML += `${cultivo}: ${resumen[cultivo].toFixed(2)} ha<br>`;
+            generarGrafico(resumen);
         }
 
-        generarGrafico(resumen, codigoFinca);
-    }
-</script>
+        // Generar gráfico de torta
+        function generarGrafico(resumen) {
+            const labels = Object.keys(resumen);
+            const data = Object.values(resumen);
+            const backgroundColors = labels.map(label => colorMap[label.toLowerCase()] || 'gray');
+
+            if (chart) chart.destroy();
+            const ctx = document.getElementById('chart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'pie',
+                data: { labels, datasets: [{ data, backgroundColor: backgroundColors }] },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
+
+        // Descargar datos en Excel
+        function descargarDatos() {
+            const ws = XLSX.utils.json_to_sheet(datosFincas);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Datos Fincas");
+            XLSX.writeFile(wb, "datos_fincas.xlsx");
+        }
+    </script>
+</body>
+</html>
