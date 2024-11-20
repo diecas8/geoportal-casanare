@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Geoportal con Bosques</title>
+    <title>Geoportal con Interacción</title>
     <!-- Estilos de Leaflet -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <!-- Script de Leaflet -->
@@ -43,11 +43,11 @@
     <div id="map"></div>
 
     <script>
-        // Configuración inicial del mapa
         const map = L.map('map').setView([5.5, -73.0], 6);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
 
         let bosquesLayer, cultivosLayer, chart, datosFincas = [];
+        let highlightedLayers = []; // Almacena las capas temporalmente resaltadas
         const colorMap = {
             'bosque de galería': '#006400',
             'arroz': '#FFD700',
@@ -64,26 +64,25 @@
             'otros': '#FF0000'
         };
 
-        // Función para cargar y agregar la capa de bosques
+        // Cargar y agregar la capa de bosques
         function cargarBosques() {
             fetch("Bosques.geojson")
                 .then(response => response.json())
                 .then(data => {
                     bosquesLayer = L.geoJSON(data, {
                         style: {
-                            color: "darkgreen", // Línea verde oscuro
-                            weight: 2, // Grosor de línea
-                            fillOpacity: 0 // Sin relleno
+                            color: "darkgreen",
+                            weight: 2,
+                            fillOpacity: 0
                         }
                     }).addTo(map);
 
-                    // Asegurar que la capa de bosques quede debajo de los cultivos
                     bosquesLayer.bringToBack();
                 })
                 .catch(error => console.error("Error al cargar la capa de bosques:", error));
         }
 
-        // Función para cargar y agregar la capa de cultivos
+        // Cargar y agregar la capa de cultivos
         function cargarCultivos() {
             fetch("Cultivos.geojson")
                 .then(response => response.json())
@@ -113,7 +112,6 @@
                         }
                     }).addTo(map);
 
-                    // Llenar selector de fincas
                     cargarListaDesplegable();
                 })
                 .catch(error => console.error("Error al cargar la capa de cultivos:", error));
@@ -135,23 +133,29 @@
             });
         }
 
-        // Filtrar y mostrar información por finca seleccionada
+        // Filtrar por finca y centrar el mapa
         function filtrarPorFinca() {
             const codigoFinca = document.getElementById("codigoFinca").value;
             const resumen = {};
             let totalArea = 0;
+            let fincaBounds = L.latLngBounds();
 
             cultivosLayer.eachLayer(layer => {
                 const { cod_finca, cultivo, has } = layer.feature.properties;
 
                 if (cod_finca === codigoFinca) {
+                    fincaBounds.extend(layer.getBounds());
                     resumen[cultivo] = (resumen[cultivo] || 0) + parseFloat(has);
                     totalArea += parseFloat(has);
                 }
             });
 
+            if (fincaBounds.isValid()) {
+                map.fitBounds(fincaBounds);
+            }
+
             mostrarResumen(resumen, totalArea);
-            generarGrafico(resumen);
+            generarGrafico(resumen, codigoFinca);
         }
 
         // Mostrar el resumen de la finca seleccionada
@@ -165,8 +169,8 @@
             }
         }
 
-        // Generar gráfico de torta
-        function generarGrafico(resumen) {
+        // Generar gráfico de torta y agregar interacción
+        function generarGrafico(resumen, codigoFinca) {
             const labels = Object.keys(resumen);
             const data = Object.values(resumen);
             const backgroundColors = labels.map(label => colorMap[label.toLowerCase()] || 'gray');
@@ -176,8 +180,40 @@
             chart = new Chart(ctx, {
                 type: 'pie',
                 data: { labels, datasets: [{ data, backgroundColor: backgroundColors }] },
-                options: { responsive: true, maintainAspectRatio: false }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    onClick: (e, elements) => {
+                        if (elements.length > 0) {
+                            const index = elements[0].index;
+                            const selectedCultivo = labels[index];
+                            resaltarCultivoEnMapa(selectedCultivo, codigoFinca);
+                        }
+                    }
+                }
             });
+        }
+
+        // Resaltar cultivos en el mapa
+        function resaltarCultivoEnMapa(cultivo, codigoFinca) {
+            // Limpiar resaltados previos
+            highlightedLayers.forEach(layer => cultivosLayer.resetStyle(layer));
+            highlightedLayers = [];
+
+            cultivosLayer.eachLayer(layer => {
+                const { cod_finca, cultivo: layerCultivo } = layer.feature.properties;
+
+                if (layerCultivo?.toLowerCase() === cultivo.toLowerCase() && cod_finca === codigoFinca) {
+                    layer.setStyle({ color: 'yellow', weight: 3 });
+                    highlightedLayers.push(layer);
+                }
+            });
+
+            // Restaurar estilos después de 2 segundos
+            setTimeout(() => {
+                highlightedLayers.forEach(layer => cultivosLayer.resetStyle(layer));
+                highlightedLayers = [];
+            }, 2000);
         }
 
         // Cargar las capas al iniciar
