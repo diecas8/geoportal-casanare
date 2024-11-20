@@ -55,6 +55,7 @@
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
 
         let usosLayer, chart, datosFincas = [];
+        let tempHighlightLayers = []; // Almacena capas temporalmente resaltadas
         const colorMap = {
             'bosque de galería': '#006400',
             'arroz': '#FFD700',
@@ -117,6 +118,7 @@
 
             const resumen = {};
             let totalArea = 0, propietario = "", nombreFinca = "";
+            let bounds = L.latLngBounds();
             usosLayer.eachLayer(layer => {
                 const { cod_finca, cultivo, has, propietari, nom_finca_ } = layer.feature.properties;
                 if (cod_finca === codigoFinca) {
@@ -124,8 +126,13 @@
                     totalArea += parseFloat(has);
                     propietario = propietari || propietario;
                     nombreFinca = nom_finca_ || nombreFinca;
+                    bounds.extend(layer.getBounds());
                 }
             });
+
+            if (bounds.isValid()) {
+                map.fitBounds(bounds);
+            }
 
             const summaryDiv = document.getElementById("summary");
             summaryDiv.innerHTML = `
@@ -138,11 +145,11 @@
                 summaryDiv.innerHTML += `${cultivo}: ${resumen[cultivo].toFixed(2)} ha<br>`;
             }
 
-            generarGrafico(resumen);
+            generarGrafico(resumen, codigoFinca);
         }
 
         // Generar gráfico de torta
-        function generarGrafico(resumen) {
+        function generarGrafico(resumen, codigoFinca) {
             const labels = Object.keys(resumen);
             const data = Object.values(resumen);
             const backgroundColors = labels.map(label => colorMap[label.toLowerCase()] || 'gray');
@@ -152,8 +159,39 @@
             chart = new Chart(ctx, {
                 type: 'pie',
                 data: { labels, datasets: [{ data, backgroundColor: backgroundColors }] },
-                options: { responsive: true, maintainAspectRatio: false }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    onClick: (e, elements) => {
+                        if (elements.length > 0) {
+                            const index = elements[0].index;
+                            const selectedCultivo = labels[index];
+                            resaltarCultivoEnMapa(selectedCultivo, codigoFinca);
+                        }
+                    }
+                }
             });
+        }
+
+        // Resaltar cultivos en el mapa al hacer clic en el gráfico
+        function resaltarCultivoEnMapa(cultivo, codigoFinca) {
+            // Limpiar resaltado temporal previo
+            tempHighlightLayers.forEach(layer => usosLayer.resetStyle(layer));
+            tempHighlightLayers = [];
+
+            usosLayer.eachLayer(layer => {
+                const { cod_finca, cultivo: layerCultivo } = layer.feature.properties;
+                if (layerCultivo?.trim().toLowerCase() === cultivo.toLowerCase() && cod_finca === codigoFinca) {
+                    layer.setStyle({ color: 'yellow', weight: 3 });
+                    tempHighlightLayers.push(layer);
+                }
+            });
+
+            // Remover resaltado después de 2 segundos
+            setTimeout(() => {
+                tempHighlightLayers.forEach(layer => usosLayer.resetStyle(layer));
+                tempHighlightLayers = [];
+            }, 2000);
         }
 
         // Descargar datos en Excel
