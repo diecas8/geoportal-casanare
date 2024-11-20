@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Geoportal con Resumen, Gráfico y Selección</title>
+    <title>Geoportal con Selección de Mapas Base y Exportación</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -48,13 +48,16 @@
     <script>
         const map = L.map('map').setView([5.5, -73.0], 6);
 
-        // Mapas base disponibles
         const baseMaps = {
             "OpenStreetMap": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
                 attribution: '© OpenStreetMap contributors'
             }),
             "Google Satélite": L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+                maxZoom: 20,
+                attribution: '© Google Maps'
+            }),
+            "Google Híbrido": L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
                 maxZoom: 20,
                 attribution: '© Google Maps'
             }),
@@ -68,12 +71,8 @@
             })
         };
 
-        // Capas de superposición
-        const overlayMaps = {};
         baseMaps["OpenStreetMap"].addTo(map);
-
-        // Crear un único control de capas
-        const layerControl = L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(map);
+        L.control.layers(baseMaps).addTo(map);
 
         let bosquesLayer, cultivosLayer, chart, datosFincaSeleccionada = [], datosFincas = [];
         const colorMap = {
@@ -106,8 +105,7 @@
                             fillOpacity: 0
                         }
                     }).addTo(map);
-                    overlayMaps["Bosques"] = bosquesLayer;
-                    layerControl.addOverlay(bosquesLayer, "Bosques");
+                    bosquesLayer.bringToBack();
                 })
                 .catch(error => console.error("Error al cargar la capa de bosques:", error));
         }
@@ -138,12 +136,11 @@
                                 Codigo: cod_finca,
                                 Finca: nom_finca_,
                                 Cultivo: cultivo,
-                                Hectareas: parseFloat(has)
+                                Hectareas: has
                             });
                         }
                     }).addTo(map);
-                    overlayMaps["Cultivos"] = cultivosLayer;
-                    layerControl.addOverlay(cultivosLayer, "Cultivos");
+
                     cargarListaDesplegable();
                 })
                 .catch(error => console.error("Error al cargar la capa de cultivos:", error));
@@ -177,40 +174,64 @@
         function filtrarPorFinca() {
             const codigoFinca = document.getElementById("codigoFinca").value;
             const resumen = {};
+            datosFincaSeleccionada = [];
             let totalArea = 0;
+            let fincaBounds = L.latLngBounds();
 
-            datosFincaSeleccionada = datosFincas.filter(finca => finca.Codigo === codigoFinca);
+            cultivosLayer.eachLayer(layer => {
+                const { cod_finca, cultivo, has } = layer.feature.properties;
 
-            datosFincaSeleccionada.forEach(finca => {
-                const { Cultivo, Hectareas } = finca;
-                resumen[Cultivo] = (resumen[Cultivo] || 0) + Hectareas;
-                totalArea += Hectareas;
+                if (cod_finca === codigoFinca) {
+                    fincaBounds.extend(layer.getBounds());
+                    if (!resumen[cultivo]) resumen[cultivo] = 0;
+                    resumen[cultivo] += parseFloat(has) || 0;
+
+                    datosFincaSeleccionada.push({
+                        Codigo: cod_finca,
+                        Cultivo: cultivo,
+                        Hectareas: parseFloat(has).toFixed(2)
+                    });
+
+                    totalArea += parseFloat(has) || 0;
+                }
             });
 
-            mostrarResumen(resumen, totalArea);
-            generarGrafico(resumen, codigoFinca);
+            if (fincaBounds.isValid()) {
+                map.fitBounds(fincaBounds);
+            }
+
+            mostrarResumen(resumen, totalArea, codigoFinca);
+            generarGrafico(Object.entries(resumen).map(([cultivo, hectareas]) => ({ Cultivo: cultivo, Hectareas: hectareas })));
         }
 
-        function mostrarResumen(resumen, totalArea) {
+        function mostrarResumen(resumen, totalArea, codigoFinca) {
             const summaryDiv = document.getElementById("summary");
-            summaryDiv.innerHTML = `<strong>Resumen</strong><br><b
-            summaryDiv.innerHTML = `<strong>Resumen</strong><br><b>Área Total:</b> ${totalArea.toFixed(2)} ha<br><br>`;
+            summaryDiv.innerHTML = `<
+                        <strong>Resumen</strong><br>`;
+            summaryDiv.innerHTML += `<b>Finca:</b> ${codigoFinca}<br>`;
+            summaryDiv.innerHTML += `<b>Área Total:</b> ${totalArea.toFixed(2)} ha<br><br>`;
 
-            for (const cultivo in resumen) {
-                summaryDiv.innerHTML += `${cultivo}: ${resumen[cultivo].toFixed(2)} ha<br>`;
+            for (const [cultivo, hectareas] of Object.entries(resumen)) {
+                summaryDiv.innerHTML += `${cultivo}: ${hectareas.toFixed(2)} ha<br>`;
             }
         }
 
-        function generarGrafico(resumen, codigoFinca) {
-            const labels = Object.keys(resumen);
-            const data = Object.values(resumen);
+        function generarGrafico(resumen) {
+            const labels = resumen.map(item => item.Cultivo);
+            const data = resumen.map(item => parseFloat(item.Hectareas));
             const backgroundColors = labels.map(label => colorMap[label.toLowerCase()] || 'gray');
 
             if (chart) chart.destroy();
             const ctx = document.getElementById('chart').getContext('2d');
             chart = new Chart(ctx, {
                 type: 'pie',
-                data: { labels, datasets: [{ data, backgroundColor: backgroundColors }] },
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: backgroundColors
+                    }]
+                },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
@@ -218,24 +239,27 @@
                         if (elements.length > 0) {
                             const index = elements[0].index;
                             const selectedCultivo = labels[index];
-                            resaltarCultivoEnMapa(selectedCultivo, codigoFinca);
+                            resaltarCultivoEnMapa(selectedCultivo);
                         }
                     }
                 }
             });
         }
 
-        function resaltarCultivoEnMapa(cultivo, codigoFinca) {
+        function resaltarCultivoEnMapa(cultivo) {
             cultivosLayer.eachLayer(layer => {
-                const { cod_finca, cultivo: layerCultivo } = layer.feature.properties;
+                const { cultivo: layerCultivo } = layer.feature.properties;
 
-                if (layerCultivo?.toLowerCase() === cultivo.toLowerCase() && cod_finca === codigoFinca) {
+                if (layerCultivo?.toLowerCase() === cultivo.toLowerCase()) {
                     layer.setStyle({ color: 'yellow', weight: 3 });
-                    setTimeout(() => {
-                        cultivosLayer.resetStyle(layer);
-                    }, 2000); // Restaurar después de 2 segundos
+                } else {
+                    cultivosLayer.resetStyle(layer);
                 }
             });
+
+            setTimeout(() => {
+                cultivosLayer.eachLayer(layer => cultivosLayer.resetStyle(layer));
+            }, 2000);
         }
 
         function exportarDatos() {
@@ -247,7 +271,7 @@
             const ws = XLSX.utils.json_to_sheet(datosFincaSeleccionada);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Datos Finca");
-            XLSX.writeFile(wb, `Datos_Finca_${datosFincaSeleccionada[0]?.Codigo || 'Seleccionada'}.xlsx`);
+            XLSX.writeFile(wb, "Datos_Finca_Seleccionada.xlsx");
         }
 
         cargarBosques();
@@ -255,3 +279,4 @@
     </script>
 </body>
 </html>
+
