@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Geoportal con Selección Ordenada</title>
+    <title>Geoportal con Selección Ordenada por Código</title>
     <!-- Estilos de Leaflet -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <!-- Script de Leaflet -->
@@ -128,8 +128,8 @@
                 }
             });
 
-            // Ordenar las fincas alfabéticamente por nombre
-            fincas.sort((a, b) => a.nombre.localeCompare(b.nombre));
+            // Ordenar las fincas alfabéticamente por código
+            fincas.sort((a, b) => a.codigo.localeCompare(b.codigo));
 
             // Generar opciones en el select
             fincas.forEach(finca => {
