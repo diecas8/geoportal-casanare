@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Geoportal con Control Mejorado</title>
+    <title>Geoportal con Mapas Base y Control de Capas</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -61,13 +61,19 @@
             "Esri Mundo Topográfico": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
                 maxZoom: 20,
                 attribution: '© Esri & contributors'
+            }),
+            "Esri Mundo Imágenes": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 20,
+                attribution: '© Esri & contributors'
             })
         };
 
         // Capas de superposición
         const overlayMaps = {};
         baseMaps["OpenStreetMap"].addTo(map);
-        L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(map);
+
+        // Crear un único control de capas
+        const layerControl = L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(map);
 
         let bosquesLayer, cultivosLayer, chart, datosFincaSeleccionada = [], datosFincas = [];
         const colorMap = {
@@ -101,7 +107,7 @@
                         }
                     }).addTo(map);
                     overlayMaps["Bosques"] = bosquesLayer;
-                    L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(map);
+                    layerControl.addOverlay(bosquesLayer, "Bosques");
                 })
                 .catch(error => console.error("Error al cargar la capa de bosques:", error));
         }
@@ -137,107 +143,10 @@
                         }
                     }).addTo(map);
                     overlayMaps["Cultivos"] = cultivosLayer;
-                    L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(map);
-
+                    layerControl.addOverlay(cultivosLayer, "Cultivos");
                     cargarListaDesplegable();
                 })
                 .catch(error => console.error("Error al cargar la capa de cultivos:", error));
-        }
-
-        function filtrarPorFinca() {
-            const codigoFinca = document.getElementById("codigoFinca").value;
-            const resumen = {};
-            datosFincaSeleccionada = [];
-            let totalArea = 0;
-            let fincaBounds = L.latLngBounds();
-
-            cultivosLayer.eachLayer(layer => {
-                const { cod_finca, cultivo, has } = layer.feature.properties;
-
-                if (cod_finca === codigoFinca) {
-                    fincaBounds.extend(layer.getBounds());
-                    if (!resumen[cultivo]) resumen[cultivo] = 0;
-                    resumen[cultivo] += parseFloat(has) || 0;
-
-                    datosFincaSeleccionada.push({
-                        Codigo: cod_finca,
-                        Cultivo: cultivo,
-                        Hectareas: parseFloat(has).toFixed(2)
-                    });
-
-                    totalArea += parseFloat(has) || 0;
-                }
-            });
-
-            if (fincaBounds.isValid()) {
-                map.fitBounds(fincaBounds);
-            }
-
-            mostrarResumen(resumen, totalArea, codigoFinca);
-            generarGrafico(Object.entries(resumen).map(([cultivo, hectareas]) => ({ Cultivo: cultivo, Hectareas: hectareas })), codigoFinca);
-        }
-
-        function mostrarResumen(resumen, totalArea, codigoFinca) {
-            const summaryDiv = document.getElementById("summary");
-            summaryDiv.innerHTML = `<strong>Resumen</strong><br>`;
-            summaryDiv.innerHTML += `<b>Finca:</b> ${codigoFinca}<br>`;
-            summaryDiv.innerHTML += `<b>Área Total:</b> ${totalArea.toFixed(2)} ha<br><br>`;
-
-            for (const [cultivo, hectareas] of Object.entries(resumen)) {
-                summaryDiv.innerHTML += `${cultivo}: ${hectareas.toFixed(2)} ha<br>`;
-            }
-        }
-
-        function generarGrafico(resumen, codigoFinca) {
-            const labels
- = resumen.map(item => item.Cultivo);
-            const data = resumen.map(item => parseFloat(item.Hectareas));
-            const backgroundColors = labels.map(label => colorMap[label.toLowerCase()] || 'gray');
-
-            if (chart) chart.destroy();
-            const ctx = document.getElementById('chart').getContext('2d');
-            chart = new Chart(ctx, {
-                type: 'pie',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        data: data,
-                        backgroundColor: backgroundColors
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    onClick: (e, elements) => {
-                        if (elements.length > 0) {
-                            const index = elements[0].index;
-                            const selectedCultivo = labels[index];
-                            resaltarCultivoEnMapa(selectedCultivo, codigoFinca);
-                        }
-                    }
-                }
-            });
-        }
-
-        function resaltarCultivoEnMapa(cultivo, codigoFinca) {
-            let highlightedLayers = [];
-
-            // Resaltar temporalmente las capas correspondientes
-            cultivosLayer.eachLayer(layer => {
-                const { cod_finca, cultivo: layerCultivo } = layer.feature.properties;
-
-                if (layerCultivo?.toLowerCase() === cultivo.toLowerCase() && cod_finca === codigoFinca) {
-                    layer.setStyle({ color: 'yellow', weight: 3 });
-                    highlightedLayers.push(layer);
-                }
-            });
-
-            // Restaurar estilos después de 2 segundos
-            setTimeout(() => {
-                highlightedLayers.forEach(layer => {
-                    cultivosLayer.resetStyle(layer);
-                });
-            }, 2000);
         }
 
         function cargarListaDesplegable() {
