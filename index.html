@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Geoportal con Selección de Mapas Base y Exportación</title>
+    <title>Geoportal con Control de Capas e Interacción</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -52,27 +52,13 @@
             "OpenStreetMap": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
                 attribution: '© OpenStreetMap contributors'
-            }),
-            "Google Satélite": L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
-                maxZoom: 20,
-                attribution: '© Google Maps'
-            }),
-            "Google Híbrido": L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
-                maxZoom: 20,
-                attribution: '© Google Maps'
-            }),
-            "Esri Mundo Topográfico": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
-                maxZoom: 20,
-                attribution: '© Esri & contributors'
-            }),
-            "Esri Mundo Imágenes": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                maxZoom: 20,
-                attribution: '© Esri & contributors'
             })
         };
 
+        const overlayMaps = {};
         baseMaps["OpenStreetMap"].addTo(map);
-        L.control.layers(baseMaps).addTo(map);
+
+        L.control.layers(baseMaps, overlayMaps).addTo(map);
 
         let bosquesLayer, cultivosLayer, chart, datosFincaSeleccionada = [], datosFincas = [];
         const colorMap = {
@@ -105,7 +91,8 @@
                             fillOpacity: 0
                         }
                     }).addTo(map);
-                    bosquesLayer.bringToBack();
+                    overlayMaps["Bosques"] = bosquesLayer;
+                    L.control.layers(baseMaps, overlayMaps).addTo(map);
                 })
                 .catch(error => console.error("Error al cargar la capa de bosques:", error));
         }
@@ -140,35 +127,12 @@
                             });
                         }
                     }).addTo(map);
+                    overlayMaps["Cultivos"] = cultivosLayer;
+                    L.control.layers(baseMaps, overlayMaps).addTo(map);
 
                     cargarListaDesplegable();
                 })
                 .catch(error => console.error("Error al cargar la capa de cultivos:", error));
-        }
-
-        function cargarListaDesplegable() {
-            const select = document.getElementById("codigoFinca");
-            select.innerHTML = `<option value="">Seleccione una finca</option>`; // Limpia las opciones
-
-            const fincas = [];
-
-            datosFincas.forEach(finca => {
-                if (!fincas.find(f => f.codigo === finca.Codigo)) {
-                    fincas.push({
-                        codigo: finca.Codigo,
-                        nombre: finca.Finca
-                    });
-                }
-            });
-
-            fincas.sort((a, b) => a.codigo.localeCompare(b.codigo));
-
-            fincas.forEach(finca => {
-                const option = document.createElement("option");
-                option.value = finca.codigo;
-                option.textContent = `${finca.codigo} (${finca.nombre})`;
-                select.appendChild(option);
-            });
         }
 
         function filtrarPorFinca() {
@@ -201,22 +165,10 @@
             }
 
             mostrarResumen(resumen, totalArea, codigoFinca);
-            generarGrafico(Object.entries(resumen).map(([cultivo, hectareas]) => ({ Cultivo: cultivo, Hectareas: hectareas })));
+            generarGrafico(Object.entries(resumen).map(([cultivo, hectareas]) => ({ Cultivo: cultivo, Hectareas: hectareas })), codigoFinca);
         }
 
-        function mostrarResumen(resumen, totalArea, codigoFinca) {
-            const summaryDiv = document.getElementById("summary");
-            summaryDiv.innerHTML = `<
-                        <strong>Resumen</strong><br>`;
-            summaryDiv.innerHTML += `<b>Finca:</b> ${codigoFinca}<br>`;
-            summaryDiv.innerHTML += `<b>Área Total:</b> ${totalArea.toFixed(2)} ha<br><br>`;
-
-            for (const [cultivo, hectareas] of Object.entries(resumen)) {
-                summaryDiv.innerHTML += `${cultivo}: ${hectareas.toFixed(2)} ha<br>`;
-            }
-        }
-
-        function generarGrafico(resumen) {
+        function generarGrafico(resumen, codigoFinca) {
             const labels = resumen.map(item => item.Cultivo);
             const data = resumen.map(item => parseFloat(item.Hectareas));
             const backgroundColors = labels.map(label => colorMap[label.toLowerCase()] || 'gray');
@@ -239,27 +191,65 @@
                         if (elements.length > 0) {
                             const index = elements[0].index;
                             const selectedCultivo = labels[index];
-                            resaltarCultivoEnMapa(selectedCultivo);
+                            resaltarCultivoEnMapa(selectedCultivo, codigoFinca);
                         }
                     }
                 }
             });
         }
 
-        function resaltarCultivoEnMapa(cultivo) {
+        function resaltarCultivoEnMapa(cultivo, codigoFinca) {
             cultivosLayer.eachLayer(layer => {
-                const { cultivo: layerCultivo } = layer.feature.properties;
+                const { cod_finca, cultivo: layerCultivo } = layer.feature.properties;
 
-                if (layerCultivo?.toLowerCase() === cultivo.toLowerCase()) {
+                if (layerCultivo?.toLowerCase() === cultivo.toLowerCase() && cod_finca === codigoFinca) {
                     layer.setStyle({ color: 'yellow', weight: 3 });
                 } else {
-                    cultivosLayer.resetStyle(layer);
+                    cultivosLayer.reset
+Style(layer);
                 }
             });
 
+            // Restaurar estilos después de 2 segundos
             setTimeout(() => {
                 cultivosLayer.eachLayer(layer => cultivosLayer.resetStyle(layer));
             }, 2000);
+        }
+
+        function mostrarResumen(resumen, totalArea, codigoFinca) {
+            const summaryDiv = document.getElementById("summary");
+            summaryDiv.innerHTML = `<strong>Resumen</strong><br>`;
+            summaryDiv.innerHTML += `<b>Finca:</b> ${codigoFinca}<br>`;
+            summaryDiv.innerHTML += `<b>Área Total:</b> ${totalArea.toFixed(2)} ha<br><br>`;
+
+            for (const [cultivo, hectareas] of Object.entries(resumen)) {
+                summaryDiv.innerHTML += `${cultivo}: ${hectareas.toFixed(2)} ha<br>`;
+            }
+        }
+
+        function cargarListaDesplegable() {
+            const select = document.getElementById("codigoFinca");
+            select.innerHTML = `<option value="">Seleccione una finca</option>`; // Limpia las opciones
+
+            const fincas = [];
+
+            datosFincas.forEach(finca => {
+                if (!fincas.find(f => f.codigo === finca.Codigo)) {
+                    fincas.push({
+                        codigo: finca.Codigo,
+                        nombre: finca.Finca
+                    });
+                }
+            });
+
+            fincas.sort((a, b) => a.codigo.localeCompare(b.codigo));
+
+            fincas.forEach(finca => {
+                const option = document.createElement("option");
+                option.value = finca.codigo;
+                option.textContent = `${finca.codigo} (${finca.nombre})`;
+                select.appendChild(option);
+            });
         }
 
         function exportarDatos() {
@@ -279,4 +269,3 @@
     </script>
 </body>
 </html>
-
