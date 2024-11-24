@@ -76,7 +76,7 @@
         map.addLayer(drawnItems);
 
         const overlayMaps = {}; // Para las capas cargadas dinámicamente
-        let fincasLayer, cultivosLayer, bosquesLayer, rutasLayer, chart, datosFincaSeleccionada = [];
+        let fincasLayer, cultivosLayer, chart, controlCapas, datosFincas = [], datosFincaSeleccionada = [];
 
         const drawControl = new L.Control.Draw({
             edit: { featureGroup: drawnItems, remove: true },
@@ -92,23 +92,8 @@
 
         map.on(L.Draw.Event.CREATED, function (e) {
             const layer = e.layer;
-            if (e.layerType === 'polygon' || e.layerType === 'rectangle') {
-                const area = calcularArea(layer);
-                layer.feature = {
-                    type: 'Feature',
-                    properties: { area },
-                    geometry: {}
-                };
-                layer.bindPopup(`Área: ${area} ha`);
-            }
             drawnItems.addLayer(layer);
         });
-
-        // Función para calcular el área en hectáreas
-        function calcularArea(layer) {
-            const area = L.GeometryUtil.geodesicArea(layer.getLatLngs()[0]);
-            return (area / 10000).toFixed(2); // Convertir a hectáreas
-        }
 
         function cargarFincas() {
             fetch("fincas.geojson")
@@ -117,14 +102,17 @@
                     fincasLayer = L.geoJSON(data, {
                         style: { color: "blue", weight: 2, fillOpacity: 0.1 },
                         onEachFeature: (feature, layer) => {
-                            const { nom_finca_, cod_finca } = feature.properties;
+                            const { nom_finca_, cod_finca, area } = feature.properties;
+                            datosFincas.push({ codigo: cod_finca, nombre: nom_finca_, area });
                             layer.bindPopup(`
                                 <b>Finca:</b> ${nom_finca_}<br>
-                                <b>Código:</b> ${cod_finca}
+                                <b>Código:</b> ${cod_finca}<br>
+                                <b>Área:</b> ${area} ha
                             `);
                         }
                     }).addTo(map);
                     overlayMaps["Fincas"] = fincasLayer;
+                    actualizarListaDesplegable();
                     actualizarControlCapas();
                 });
         }
@@ -149,44 +137,61 @@
                 });
         }
 
-        function cargarBosques() {
-            fetch("Bosques.geojson")
-                .then(response => response.json())
-                .then(data => {
-                    bosquesLayer = L.geoJSON(data, {
-                        style: { color: "darkgreen", weight: 2, fillOpacity: 0.2 },
-                        onEachFeature: (feature, layer) => {
-                            layer.bindPopup("<b>Área de bosque</b>");
-                        }
-                    }).addTo(map);
-                    overlayMaps["Bosques"] = bosquesLayer;
-                    actualizarControlCapas();
-                });
+        function actualizarListaDesplegable() {
+            const select = document.getElementById('codigoFinca');
+            datosFincas.forEach(finca => {
+                const option = document.createElement('option');
+                option.value = finca.codigo;
+                option.textContent = `${finca.codigo} (${finca.nombre})`;
+                select.appendChild(option);
+            });
         }
 
-        function cargarRutas() {
-            fetch("Rutas.geojson")
-                .then(response => response.json())
-                .then(data => {
-                    rutasLayer = L.geoJSON(data, {
-                        style: { color: "purple", weight: 2 },
-                        onEachFeature: (feature, layer) => {
-                            layer.bindPopup("<b>Ruta registrada</b>");
-                        }
-                    }).addTo(map);
-                    overlayMaps["Rutas"] = rutasLayer;
-                    actualizarControlCapas();
-                });
+        function filtrarPorFinca() {
+            const codigoFinca = document.getElementById("codigoFinca").value;
+            const resumen = {};
+            datosFincaSeleccionada = [];
+            cultivosLayer.eachLayer(layer => {
+                const { cod_finca, cultivo, has } = layer.feature.properties;
+                if (cod_finca === codigoFinca) {
+                    if (!resumen[cultivo]) resumen[cultivo] = 0;
+                    resumen[cultivo] += parseFloat(has) || 0;
+                    datosFincaSeleccionada.push({ cultivo, hectareas: parseFloat(has).toFixed(2) });
+                }
+            });
+            mostrarResumen(resumen);
+            generarGrafico(Object.entries(resumen).map(([cultivo, hectareas]) => ({ cultivo, hectareas })));
+        }
+
+        function mostrarResumen(resumen) {
+            const summaryDiv = document.getElementById("summary");
+            summaryDiv.innerHTML = `<strong>Resumen</strong><br>`;
+            for (const [cultivo, hectareas] of Object.entries(resumen)) {
+                summaryDiv.innerHTML += `<b>${cultivo}:</b> ${hectareas.toFixed(2)} ha<br>`;
+            }
+        }
+
+        function generarGrafico(data) {
+            const labels = data.map(d => d.cultivo);
+            const values = data.map(d => d.hectareas);
+            if (chart) chart.destroy();
+            const ctx = document.getElementById('chart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels,
+                    datasets: [{ data: values, backgroundColor: ["#FFD700", "#8B4513", "#32CD32", "#006400"] }]
+                }
+            });
         }
 
         function actualizarControlCapas() {
-            L.control.layers(baseMaps, overlayMaps).addTo(map);
+            if (controlCapas) map.removeControl(controlCapas);
+            controlCapas = L.control.layers(baseMaps, overlayMaps).addTo(map);
         }
 
         cargarFincas();
         cargarCultivos();
-        cargarBosques();
-        cargarRutas();
     </script>
 </body>
 </html>
