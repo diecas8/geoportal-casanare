@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Geoportal con Capas, Gráficos y Dibujo</title>
+    <title>Geoportal Completo</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -27,12 +27,9 @@
             position: absolute;
             bottom: 10px;
             left: 10px;
-            font-size: 14px;
-            color: #555;
-            background: white;
-            padding: 5px 10px;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            font-size: 14px; color: #555;
+            background: white; padding: 5px 10px;
+            border-radius: 5px; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
         }
     </style>
 </head>
@@ -66,7 +63,6 @@
     <script>
         const map = L.map('map').setView([5.5, -73.0], 6);
 
-        // Capas base
         const baseMaps = {
             "OpenStreetMap": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
@@ -84,15 +80,12 @@
 
         baseMaps["OpenStreetMap"].addTo(map);
 
-        // Capas de overlay
         const overlayMaps = {};
-        let drawnItems = new L.FeatureGroup();
+        const drawnItems = new L.FeatureGroup();
         map.addLayer(drawnItems);
 
-        // Control de capas
         const layerControl = L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(map);
 
-        // Control de dibujo
         const drawControl = new L.Control.Draw({
             edit: {
                 featureGroup: drawnItems,
@@ -101,16 +94,8 @@
             draw: {
                 polyline: false,
                 circle: false,
-                rectangle: {
-                    shapeOptions: {
-                        color: 'blue'
-                    }
-                },
-                polygon: {
-                    shapeOptions: {
-                        color: 'green'
-                    }
-                },
+                rectangle: { shapeOptions: { color: 'blue' } },
+                polygon: { shapeOptions: { color: 'green' } },
                 marker: true
             }
         });
@@ -118,8 +103,6 @@
 
         map.on(L.Draw.Event.CREATED, function (e) {
             const layer = e.layer;
-
-            // Solicitar atributos al usuario
             const tipo = e.layerType === 'marker' ? 'Cultivo' : 'Finca';
             const nombre = prompt(`Nombre del ${tipo}:`) || 'Sin nombre';
             const propietario = prompt(`Propietario del ${tipo}:`) || 'Sin propietario';
@@ -127,17 +110,12 @@
 
             if (e.layerType === 'polygon' || e.layerType === 'rectangle') {
                 const area = L.GeometryUtil.geodesicArea(layer.getLatLngs()[0]);
-                hectareas = (area / 10000).toFixed(2); // Convertir de m² a hectáreas
+                hectareas = (area / 10000).toFixed(2);
             }
 
             layer.feature = {
                 type: 'Feature',
-                properties: {
-                    tipo: tipo,
-                    nombre: nombre,
-                    propietario: propietario,
-                    hectareas: hectareas || 'N/A'
-                },
+                properties: { tipo, nombre, propietario, hectareas: hectareas || 'N/A' },
                 geometry: {}
             };
 
@@ -150,41 +128,15 @@
             drawnItems.addLayer(layer);
         });
 
-        // Exportar a GeoJSON
         function exportarGeoJSON() {
             const geojson = drawnItems.toGeoJSON();
             const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: "application/json" });
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
-            link.download = "dibujo_fincas_y_cultivos.geojson";
+            link.download = "fincas_y_cultivos.geojson";
             link.click();
         }
 
-        // Generar gráfico
-        function generarGrafico(resumen) {
-            const labels = resumen.map(item => item.Cultivo);
-            const data = resumen.map(item => parseFloat(item.Hectareas));
-            const backgroundColors = labels.map(label => '#FFD700');
-
-            if (chart) chart.destroy();
-            const ctx = document.getElementById('chart').getContext('2d');
-            chart = new Chart(ctx, {
-                type: 'pie',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        data: data,
-                        backgroundColor: backgroundColors
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false
-                }
-            });
-        }
-
-        // Cargar capa de cultivos
         function cargarCultivos() {
             fetch("cultivos.geojson")
                 .then(response => response.json())
@@ -199,7 +151,20 @@
                 .catch(err => console.error("Error al cargar cultivos:", err));
         }
 
+        function cargarFincas() {
+            fetch("fincas.geojson")
+                .then(response => response.json())
+                .then(data => {
+                    const fincasLayer = L.geoJSON(data, { style: { color: '#00BFFF', weight: 1 } });
+                    fincasLayer.addTo(map);
+                    overlayMaps["Fincas"] = fincasLayer;
+                    layerControl.addOverlay(fincasLayer, "Fincas");
+                })
+                .catch(err => console.error("Error al cargar fincas:", err));
+        }
+
         cargarCultivos();
+        cargarFincas();
     </script>
 </body>
 </html>
