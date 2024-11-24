@@ -88,16 +88,6 @@
         });
         map.addControl(drawControl);
 
-        // Cálculo automático de área en hectáreas
-        function calcularArea(layer) {
-            if (layer instanceof L.Polygon || layer instanceof L.Rectangle) {
-                const areaMetrosCuadrados = L.GeometryUtil.geodesicArea(layer.getLatLngs()[0]);
-                return (areaMetrosCuadrados / 10000).toFixed(2); // Convertir a hectáreas
-            }
-            return 0;
-        }
-
-        // Evento al dibujar en el mapa
         map.on(L.Draw.Event.CREATED, function (e) {
             const layer = e.layer;
 
@@ -129,6 +119,14 @@
 
             drawnItems.addLayer(layer);
         });
+
+        function calcularArea(layer) {
+            if (layer instanceof L.Polygon || layer instanceof L.Rectangle) {
+                const areaMetrosCuadrados = L.GeometryUtil.geodesicArea(layer.getLatLngs()[0]);
+                return (areaMetrosCuadrados / 10000).toFixed(2);
+            }
+            return 0;
+        }
 
         function cargarFincas() {
             fetch("fincas.geojson")
