@@ -76,9 +76,11 @@
         };
 
         function cargarCultivos() {
+            console.log("Cargando cultivos...");
             fetch("cultivos.geojson")
                 .then(response => response.json())
                 .then(data => {
+                    console.log("Datos de cultivos cargados:", data);
                     cultivosLayer = L.geoJSON(data, {
                         style: feature => ({
                             color: colorMap[feature.properties.cultivo?.toLowerCase()] || 'gray',
@@ -109,6 +111,7 @@
         }
 
         function cargarListaDesplegable() {
+            console.log("Cargando lista desplegable...");
             const select = document.getElementById("codigoFinca");
             select.innerHTML = `<option value="">Seleccione una finca</option>`;
             const fincas = [];
@@ -131,6 +134,7 @@
 
         function filtrarPorFinca() {
             const codigoFinca = document.getElementById("codigoFinca").value;
+            console.log("Filtrando por finca:", codigoFinca);
             const resumen = {};
             datosFincaSeleccionada = [];
             let totalArea = 0;
@@ -155,6 +159,7 @@
                 }
             });
 
+            console.log("Datos filtrados:", datosFincaSeleccionada);
             mostrarResumen(resumen, totalArea, codigoFinca);
             generarGrafico(Object.entries(resumen).map(([cultivo, hectareas]) => ({ Cultivo: cultivo, Hectareas: hectareas })));
         }
@@ -171,6 +176,7 @@
         }
 
         function generarGrafico(resumen) {
+            console.log("Generando gráfico con datos:", resumen);
             const labels = resumen.map(item => item.Cultivo);
             const data = resumen.map(item => parseFloat(item.Hectareas));
             const backgroundColors = labels.map(label => colorMap[label.toLowerCase()] || 'gray');
@@ -193,20 +199,7 @@
             });
         }
 
-        function exportarDatos() {
-            if (datosFincaSeleccionada.length === 0) {
-                alert("Por favor, seleccione una finca primero.");
-                return;
-            }
-
-            const ws = XLSX.utils.json_to_sheet(datosFincaSeleccionada);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Datos Finca");
-            XLSX.writeFile(wb, "Datos_Finca_Seleccionada.xlsx");
-        }
-
         cargarCultivos();
     </script>
 </body>
 </html>
-``
