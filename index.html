@@ -64,10 +64,8 @@
     </div>
 
     <script>
-        // Inicializar el mapa
         const map = L.map('map').setView([5.5, -73.0], 6);
 
-        // Capas base
         const baseMaps = {
             "OpenStreetMap": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
@@ -85,61 +83,102 @@
 
         baseMaps["OpenStreetMap"].addTo(map);
 
-        // Capas de overlay
         const overlayMaps = {};
         const drawnItems = new L.FeatureGroup();
         map.addLayer(drawnItems);
 
         const layerControl = L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(map);
 
-        // Cargar GeoJSON
-        function cargarGeoJSON(nombreArchivo, estilo, nombreCapa) {
-            fetch(nombreArchivo)
+        const colorMap = {
+            'bosque de galería': '#006400',
+            'pasto limpio': '#D2B48C',
+            'pasto arbolado': '#FF6347',
+            'cacao': '#8B4513',
+            'otros': '#FF0000'
+        };
+
+        let fincasLayer, cultivosLayer, bosquesLayer;
+
+        // Cargar GeoJSON y llenar la lista desplegable
+        function cargarFincas() {
+            fetch("fincas.geojson")
                 .then(response => response.json())
                 .then(data => {
-                    const capa = L.geoJSON(data, { style: estilo });
-                    capa.addTo(map);
-                    overlayMaps[nombreCapa] = capa;
-                    layerControl.addOverlay(capa, nombreCapa);
+                    fincasLayer = L.geoJSON(data, {
+                        style: { color: '#00BFFF', weight: 1 },
+                        onEachFeature: (feature, layer) => {
+                            const { cod_finca, nom_finca_ } = feature.properties;
+                            layer.bindPopup(`<b>Finca:</b> ${nom_finca_} <br><b>Código:</b> ${cod_finca}`);
+
+                            const select = document.getElementById("codigoFinca");
+                            const option = document.createElement("option");
+                            option.value = cod_finca;
+                            option.text = `${cod_finca} (${nom_finca_})`;
+                            select.appendChild(option);
+                        }
+                    }).addTo(map);
+                    overlayMaps["Fincas"] = fincasLayer;
+                    layerControl.addOverlay(fincasLayer, "Fincas");
                 })
-                .catch(err => console.error(`Error al cargar ${nombreArchivo}:`, err));
+                .catch(err => console.error("Error al cargar fincas:", err));
         }
 
-        // Cargar cultivos, bosques y fincas
-        cargarGeoJSON("cultivos.geojson", { color: '#FFD700', weight: 1, fillOpacity: 0.5 }, "Cultivos");
-        cargarGeoJSON("Bosques.geojson", { color: '#228B22', weight: 1, fillOpacity: 0.4 }, "Bosques");
-        cargarGeoJSON("fincas.geojson", { color: '#00BFFF', weight: 1 }, "Fincas");
+        function cargarCultivos() {
+            fetch("cultivos.geojson")
+                .then(response => response.json())
+                .then(data => {
+                    cultivosLayer = L.geoJSON(data, {
+                        style: feature => ({
+                            color: colorMap[feature.properties.cultivo?.toLowerCase()] || 'gray',
+                            weight: 1,
+                            fillOpacity: 0.5
+                        })
+                    }).addTo(map);
+                    overlayMaps["Cultivos"] = cultivosLayer;
+                    layerControl.addOverlay(cultivosLayer, "Cultivos");
+                })
+                .catch(err => console.error("Error al cargar cultivos:", err));
+        }
 
-        // Generar resumen y gráfico
+        function cargarBosques() {
+            fetch("Bosques.geojson")
+                .then(response => response.json())
+                .then(data => {
+                    bosquesLayer = L.geoJSON(data, {
+                        style: { color: '#228B22', weight: 1, fillOpacity: 0.4 }
+                    }).addTo(map);
+                    overlayMaps["Bosques"] = bosquesLayer;
+                    layerControl.addOverlay(bosquesLayer, "Bosques");
+                })
+                .catch(err => console.error("Error al cargar bosques:", err));
+        }
+
+        cargarFincas();
+        cargarCultivos();
+        cargarBosques();
+
         function filtrarPorFinca() {
             const codigoFinca = document.getElementById("codigoFinca").value;
+            if (!codigoFinca) return;
+
             const resumen = {};
             let totalArea = 0;
 
-            // Recorrer las capas para encontrar los datos de la finca
-            overlayMaps["Cultivos"].eachLayer(layer => {
+            cultivosLayer.eachLayer(layer => {
                 const { cod_finca, cultivo, has } = layer.feature.properties;
-
                 if (cod_finca === codigoFinca) {
-                    if (!resumen[cultivo]) resumen[cultivo] = 0;
-                    resumen[cultivo] += parseFloat(has) || 0;
-                    totalArea += parseFloat(has) || 0;
+                    resumen[cultivo] = (resumen[cultivo] || 0) + parseFloat(has);
+                    totalArea += parseFloat(has);
                 }
             });
 
             mostrarResumen(resumen, totalArea, codigoFinca);
-            generarGrafico(Object.entries(resumen).map(([cultivo, hectareas]) => ({
-                Cultivo: cultivo,
-                Hectareas: hectareas
-            })));
+            generarGrafico(Object.entries(resumen).map(([cultivo, hectareas]) => ({ Cultivo: cultivo, Hectareas: hectareas })));
         }
 
         function mostrarResumen(resumen, totalArea, codigoFinca) {
             const summaryDiv = document.getElementById("summary");
-            summaryDiv.innerHTML = `<strong>Resumen</strong><br>`;
-            summaryDiv.innerHTML += `<b>Finca:</b> ${codigoFinca}<br>`;
-            summaryDiv.innerHTML += `<b>Área Total:</b> ${totalArea.toFixed(2)} ha<br><br>`;
-
+            summaryDiv.innerHTML = `<strong>Resumen</strong><br><b>Finca:</b> ${codigoFinca}<br><b>Área Total:</b> ${totalArea.toFixed(2)} ha<br>`;
             for (const [cultivo, hectareas] of Object.entries(resumen)) {
                 summaryDiv.innerHTML += `${cultivo}: ${hectareas.toFixed(2)} ha<br>`;
             }
@@ -148,7 +187,7 @@
         function generarGrafico(resumen) {
             const labels = resumen.map(item => item.Cultivo);
             const data = resumen.map(item => parseFloat(item.Hectareas));
-            const backgroundColors = labels.map(() => '#FFD700');
+            const backgroundColors = labels.map(label => colorMap[label.toLowerCase()] || 'gray');
 
             const ctx = document.getElementById('chart').getContext('2d');
             new Chart(ctx, {
