@@ -88,6 +88,47 @@
         });
         map.addControl(drawControl);
 
+        // Calcular área en hectáreas
+        function calcularArea(layer) {
+            if (layer instanceof L.Polygon || layer instanceof L.Rectangle) {
+                const areaMetrosCuadrados = L.GeometryUtil.geodesicArea(layer.getLatLngs()[0]);
+                return (areaMetrosCuadrados / 10000).toFixed(2); // Convertir a hectáreas
+            }
+            return 0;
+        }
+
+        map.on(L.Draw.Event.CREATED, function (e) {
+            const layer = e.layer;
+
+            if (e.layerType === 'marker') {
+                layer.feature = {
+                    type: 'Feature',
+                    properties: {
+                        type: 'Cultivo',
+                        name: prompt("Nombre del cultivo:")
+                    },
+                    geometry: {}
+                };
+            } else if (e.layerType === 'polygon' || e.layerType === 'rectangle') {
+                const areaHectareas = calcularArea(layer);
+                layer.feature = {
+                    type: 'Feature',
+                    properties: {
+                        type: 'Finca',
+                        name: prompt("Nombre de la finca:"),
+                        area: areaHectareas
+                    },
+                    geometry: {}
+                };
+                layer.bindPopup(`
+                    <b>Finca:</b> ${layer.feature.properties.name}<br>
+                    <b>Área:</b> ${areaHectareas} ha
+                `);
+            }
+
+            drawnItems.addLayer(layer);
+        });
+
         // Cargar GeoJSON de fincas y cultivos
         function cargarFincas() {
             fetch("fincas.geojson")
