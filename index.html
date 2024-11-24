@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Geoportal con Control de Capas y Gráficos</title>
+    <title>Geoportal con Capas, Gráficos y Dibujo</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -64,7 +64,6 @@
     </div>
 
     <script>
-        // Inicializar el mapa
         const map = L.map('map').setView([5.5, -73.0], 6);
 
         // Capas base
@@ -185,7 +184,7 @@
             });
         }
 
-        // Agregar funciones faltantes
+        // Cargar capa de cultivos
         function cargarCultivos() {
             fetch("cultivos.geojson")
                 .then(response => response.json())
