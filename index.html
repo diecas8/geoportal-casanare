@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Geoportal con Dibujo y Exportación</title>
+    <title>Geoportal con Atributos Personalizados</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -74,11 +74,9 @@
         const overlayMaps = {}; // Capas dinámicas para el control de capas
         let controlCapas = null; // Variable para evitar múltiples controles
 
-        // Grupo de capas dibujadas por el usuario
         const drawnItems = new L.FeatureGroup();
         map.addLayer(drawnItems);
 
-        // Control de dibujo
         const drawControl = new L.Control.Draw({
             edit: {
                 featureGroup: drawnItems,
@@ -161,7 +159,104 @@
             'otros': '#FF0000'
         };
 
-        // Aquí permanecen las funciones existentes como cargarBosques, cargarCultivos, cargarFincas, filtrarPorFinca, mostrarResumen, generarGrafico, etc.
+        // Funciones de inicialización existentes
+        function cargarBosques() {
+            fetch("Bosques.geojson")
+                .then(response => response.json())
+                .then(data => {
+                    bosquesLayer = L.geoJSON(data, {
+                        style: { color: "darkgreen", weight: 2, fillOpacity: 0 }
+                    });
+                    overlayMaps["Bosques"] = bosquesLayer;
+                    bosquesLayer.addTo(map);
+                    actualizarControlCapas();
+                })
+                .catch(error => console.error("Error al cargar la capa de bosques:", error));
+        }
+
+        function cargarCultivos() {
+            fetch("cultivos.geojson")
+                .then(response => response.json())
+                .then(data => {
+                    cultivosLayer = L.geoJSON(data, {
+                        style: feature => ({
+                            color: colorMap[feature.properties.cultivo?.toLowerCase()] || 'gray',
+                            weight: 1,
+                            fillOpacity: 0.5
+                        }),
+                        onEachFeature: (feature, layer) => {
+                            const { cod_finca, nom_finca_, cultivo, has } = feature.properties;
+
+                            layer.bindPopup(`
+                                <b>Cultivo:</b> ${cultivo}<br>
+                                <b>Área:</b> ${parseFloat(has).toFixed(2)} ha<br>
+                                <b>Finca:</b> ${nom_finca_}
+                            `);
+
+                            datosFincas.push({
+                                Codigo: cod_finca,
+                                Finca: nom_finca_,
+                                Cultivo: cultivo,
+                                Hectareas: has
+                            });
+                        }
+                    });
+                    overlayMaps["Cultivos"] = cultivosLayer;
+                    cultivosLayer.addTo(map);
+                    cargarListaDesplegable();
+                    actualizarControlCapas();
+                })
+                .catch(error => console.error("Error al cargar la capa de cultivos:", error));
+        }
+
+        function cargarFincas() {
+            fetch("fincas.geojson")
+                .then(response => response.json())
+                .then(data => {
+                    fincasLayer = L.geoJSON(data, {
+                        style: { color: "blue", weight: 2, fillOpacity: 0.1 },
+                        onEachFeature: (feature, layer) => {
+                            const { cod_finca, nom_finca_, area } = feature.properties;
+                            layer.bindPopup(`
+                                <b>Finca:</b> ${nom_finca_}<br>
+                                <b>Código:</b> ${cod_finca}<br>
+                                <b>Área:</b> ${parseFloat(area).toFixed(2)} ha
+                            `);
+                        }
+                    });
+                    overlayMaps["Fincas"] = fincasLayer;
+                    fincasLayer.addTo(map);
+                    actualizarControlCapas();
+                })
+                .catch(error => console.error("Error al cargar la capa de fincas:", error));
+        }
+
+        function actualizarControlCapas() {
+            if (controlCapas) map.removeControl(controlCapas);
+            controlCapas = L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(map);
+        }
+
+        function cargarListaDesplegable() {
+            const select = document.getElementById("codigoFinca");
+            select.innerHTML = `<option value="">Seleccione una finca</option>`;
+            const fincas = [];
+
+            datosFincas.forEach(finca => {
+                if (!fincas.find(f => f.codigo === finca.Codigo)) {
+                    fincas.push({ codigo: finca.Codigo, nombre: finca.Finca });
+                }
+            });
+
+            fincas.sort((a, b) => a.codigo.localeCompare(b.codigo));
+
+            fincas.forEach(finca => {
+                const option = document.createElement("option");
+                option.value = finca.codigo;
+                option.textContent = `${finca.codigo} (${finca.nombre})`;
+                select.appendChild(option);
+            });
+        }
+
         cargarBosques();
         cargarCultivos();
         cargarFincas();
