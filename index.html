@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Geoportal con Resumen, Gráficos y Edición</title>
+    <title>Geoportal con Resumen, Gráficos, y Edición</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -62,9 +62,15 @@
 
         baseMaps["OpenStreetMap"].addTo(map);
 
-        let cultivosLayer, chart, datosFincaSeleccionada = [], datosFincas = [];
+        let cultivosLayer, fincasLayer, bosquesLayer, chart, datosFincaSeleccionada = [], datosFincas = [];
         const drawnItems = new L.FeatureGroup(); // Capa para los elementos dibujados por el usuario
         map.addLayer(drawnItems);
+
+        // Agregar control de capas
+        const overlayMaps = {
+            "Cultivos": drawnItems
+        };
+        const layerControl = L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(map);
 
         // Control de dibujo
         const drawControl = new L.Control.Draw({
@@ -167,6 +173,8 @@
                         }
                     });
                     cultivosLayer.addTo(map);
+                    overlayMaps["Cultivos"] = cultivosLayer;
+                    layerControl.addOverlay(cultivosLayer, "Cultivos");
                     cargarListaDesplegable();
                 })
                 .catch(error => console.error("Error al cargar la capa de cultivos:", error));
