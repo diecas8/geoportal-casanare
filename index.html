@@ -72,7 +72,7 @@
 
         baseMaps["OpenStreetMap"].addTo(map);
 
-        let fincasLayer, cultivosLayer, chart, datosFincaSeleccionada = [], datosFincas = [];
+        let bosquesLayer, cultivosLayer, fincasLayer, chart, datosFincaSeleccionada = [], datosFincas = [];
         const drawnItems = new L.FeatureGroup();
         map.addLayer(drawnItems);
 
@@ -88,7 +88,7 @@
         });
         map.addControl(drawControl);
 
-        // Calcular área en hectáreas
+        // Cálculo automático de área en hectáreas
         function calcularArea(layer) {
             if (layer instanceof L.Polygon || layer instanceof L.Rectangle) {
                 const areaMetrosCuadrados = L.GeometryUtil.geodesicArea(layer.getLatLngs()[0]);
@@ -97,6 +97,7 @@
             return 0;
         }
 
+        // Evento al dibujar en el mapa
         map.on(L.Draw.Event.CREATED, function (e) {
             const layer = e.layer;
 
@@ -129,7 +130,6 @@
             drawnItems.addLayer(layer);
         });
 
-        // Cargar GeoJSON de fincas y cultivos
         function cargarFincas() {
             fetch("fincas.geojson")
                 .then(response => response.json())
@@ -176,7 +176,6 @@
                 .catch(error => console.error("Error al cargar los cultivos:", error));
         }
 
-        // Generar lista desplegable de fincas
         function actualizarListaFincas(fincas) {
             const select = document.getElementById('codigoFinca');
             fincas.forEach(finca => {
@@ -187,7 +186,6 @@
             });
         }
 
-        // Filtrar y mostrar resumen
         function filtrarPorFinca() {
             const codigoFinca = document.getElementById("codigoFinca").value;
             const resumen = {};
@@ -224,6 +222,22 @@
                     datasets: [{ data: values, backgroundColor: ["#FFD700", "#8B4513", "#32CD32", "#006400"] }]
                 }
             });
+        }
+
+        function exportarGeoJSON() {
+            const geojson = drawnItems.toGeoJSON();
+            const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: "application/json" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "dibujos.geojson";
+            link.click();
+        }
+
+        function exportarDatos() {
+            const ws = XLSX.utils.json_to_sheet(datosFincaSeleccionada);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Datos Finca");
+            XLSX.writeFile(wb, "Datos_Finca_Seleccionada.xlsx");
         }
 
         cargarFincas();
