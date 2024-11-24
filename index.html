@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Geoportal Depurado</title>
+    <title>Geoportal con Control de Capas y Gráficos</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -12,7 +12,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         body { margin: 0; padding: 0; font-family: Arial, sans-serif; display: flex; height: 100vh; }
-        #map { flex: 1; height: 100%; }
+        #map { flex: 1; height: 100%; position: relative; }
         .sidebar {
             width: 350px; padding: 15px; background-color: #f8f9fa; overflow-y: auto;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); border-right: 1px solid #ddd;
@@ -23,6 +23,17 @@
         .summary, .chart-container, .export-container { background: white; padding: 10px; border-radius: 5px; border: 1px solid #ddd; }
         .export-container button { width: 100%; padding: 10px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
         .export-container button:hover { background-color: #0056b3; }
+        .footer {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            font-size: 14px;
+            color: #555;
+            background: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
     </style>
 </head>
 <body>
@@ -48,26 +59,39 @@
             <button onclick="exportarGeoJSON()">Exportar GeoJSON</button>
         </div>
     </div>
-    <div id="map"></div>
+    <div id="map">
+        <div class="footer">Geoportal elaborado por: Diego Castaño</div>
+    </div>
 
     <script>
         // Inicializar el mapa
         const map = L.map('map').setView([5.5, -73.0], 6);
-        console.log("Mapa inicializado");
 
         // Capas base
         const baseMaps = {
             "OpenStreetMap": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
                 attribution: '© OpenStreetMap contributors'
+            }),
+            "Google Satélite": L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+                maxZoom: 20,
+                attribution: '© Google Maps'
+            }),
+            "Google Híbrido": L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+                maxZoom: 20,
+                attribution: '© Google Maps'
             })
         };
 
         baseMaps["OpenStreetMap"].addTo(map);
-        console.log("Capa base añadida");
 
+        // Capas de overlay
+        const overlayMaps = {};
         let drawnItems = new L.FeatureGroup();
         map.addLayer(drawnItems);
+
+        // Control de capas
+        const layerControl = L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(map);
 
         // Control de dibujo
         const drawControl = new L.Control.Draw({
@@ -107,7 +131,6 @@
                 hectareas = (area / 10000).toFixed(2); // Convertir de m² a hectáreas
             }
 
-            // Añadir propiedades
             layer.feature = {
                 type: 'Feature',
                 properties: {
@@ -126,14 +149,11 @@
                 <b>Hectáreas:</b> ${hectareas}
             `);
             drawnItems.addLayer(layer);
-            console.log("Nueva capa añadida:", layer.feature);
         });
 
         // Exportar a GeoJSON
         function exportarGeoJSON() {
             const geojson = drawnItems.toGeoJSON();
-            console.log("Exportando GeoJSON:", geojson);
-
             const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: "application/json" });
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
@@ -141,19 +161,46 @@
             link.click();
         }
 
-        // Función para detectar errores al cargar recursos
-        function manejarError(err, recurso) {
-            console.error(`Error al cargar ${recurso}:`, err);
+        // Generar gráfico
+        function generarGrafico(resumen) {
+            const labels = resumen.map(item => item.Cultivo);
+            const data = resumen.map(item => parseFloat(item.Hectareas));
+            const backgroundColors = labels.map(label => '#FFD700');
+
+            if (chart) chart.destroy();
+            const ctx = document.getElementById('chart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: backgroundColors
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
         }
 
-        // Asegurar que los recursos sean accesibles
-        try {
-            cargarCultivos();
-        } catch (err) {
-            manejarError(err, "cultivos.geojson");
+        // Agregar funciones faltantes
+        function cargarCultivos() {
+            fetch("cultivos.geojson")
+                .then(response => response.json())
+                .then(data => {
+                    const cultivosLayer = L.geoJSON(data, {
+                        style: { color: '#FFD700', weight: 1, fillOpacity: 0.5 }
+                    });
+                    cultivosLayer.addTo(map);
+                    overlayMaps["Cultivos"] = cultivosLayer;
+                    layerControl.addOverlay(cultivosLayer, "Cultivos");
+                })
+                .catch(err => console.error("Error al cargar cultivos:", err));
         }
 
-        console.log("Todo cargado correctamente");
+        cargarCultivos();
     </script>
 </body>
 </html>
