@@ -27,9 +27,12 @@
             position: absolute;
             bottom: 10px;
             left: 10px;
-            font-size: 14px; color: #555;
-            background: white; padding: 5px 10px;
-            border-radius: 5px; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            font-size: 14px;
+            color: #555;
+            background: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
         }
     </style>
 </head>
@@ -61,8 +64,10 @@
     </div>
 
     <script>
+        // Inicializar el mapa
         const map = L.map('map').setView([5.5, -73.0], 6);
 
+        // Capas base
         const baseMaps = {
             "OpenStreetMap": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
@@ -80,91 +85,81 @@
 
         baseMaps["OpenStreetMap"].addTo(map);
 
+        // Capas de overlay
         const overlayMaps = {};
         const drawnItems = new L.FeatureGroup();
         map.addLayer(drawnItems);
 
         const layerControl = L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(map);
 
-        const drawControl = new L.Control.Draw({
-            edit: {
-                featureGroup: drawnItems,
-                remove: true
-            },
-            draw: {
-                polyline: false,
-                circle: false,
-                rectangle: { shapeOptions: { color: 'blue' } },
-                polygon: { shapeOptions: { color: 'green' } },
-                marker: true
-            }
-        });
-        map.addControl(drawControl);
-
-        map.on(L.Draw.Event.CREATED, function (e) {
-            const layer = e.layer;
-            const tipo = e.layerType === 'marker' ? 'Cultivo' : 'Finca';
-            const nombre = prompt(`Nombre del ${tipo}:`) || 'Sin nombre';
-            const propietario = prompt(`Propietario del ${tipo}:`) || 'Sin propietario';
-            let hectareas = 0;
-
-            if (e.layerType === 'polygon' || e.layerType === 'rectangle') {
-                const area = L.GeometryUtil.geodesicArea(layer.getLatLngs()[0]);
-                hectareas = (area / 10000).toFixed(2);
-            }
-
-            layer.feature = {
-                type: 'Feature',
-                properties: { tipo, nombre, propietario, hectareas: hectareas || 'N/A' },
-                geometry: {}
-            };
-
-            layer.bindPopup(`
-                <b>Tipo:</b> ${tipo}<br>
-                <b>Nombre:</b> ${nombre}<br>
-                <b>Propietario:</b> ${propietario}<br>
-                <b>Hectáreas:</b> ${hectareas}
-            `);
-            drawnItems.addLayer(layer);
-        });
-
-        function exportarGeoJSON() {
-            const geojson = drawnItems.toGeoJSON();
-            const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: "application/json" });
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.download = "fincas_y_cultivos.geojson";
-            link.click();
-        }
-
-        function cargarCultivos() {
-            fetch("cultivos.geojson")
+        // Cargar GeoJSON
+        function cargarGeoJSON(nombreArchivo, estilo, nombreCapa) {
+            fetch(nombreArchivo)
                 .then(response => response.json())
                 .then(data => {
-                    const cultivosLayer = L.geoJSON(data, {
-                        style: { color: '#FFD700', weight: 1, fillOpacity: 0.5 }
-                    });
-                    cultivosLayer.addTo(map);
-                    overlayMaps["Cultivos"] = cultivosLayer;
-                    layerControl.addOverlay(cultivosLayer, "Cultivos");
+                    const capa = L.geoJSON(data, { style: estilo });
+                    capa.addTo(map);
+                    overlayMaps[nombreCapa] = capa;
+                    layerControl.addOverlay(capa, nombreCapa);
                 })
-                .catch(err => console.error("Error al cargar cultivos:", err));
+                .catch(err => console.error(`Error al cargar ${nombreArchivo}:`, err));
         }
 
-        function cargarFincas() {
-            fetch("fincas.geojson")
-                .then(response => response.json())
-                .then(data => {
-                    const fincasLayer = L.geoJSON(data, { style: { color: '#00BFFF', weight: 1 } });
-                    fincasLayer.addTo(map);
-                    overlayMaps["Fincas"] = fincasLayer;
-                    layerControl.addOverlay(fincasLayer, "Fincas");
-                })
-                .catch(err => console.error("Error al cargar fincas:", err));
+        // Cargar cultivos, bosques y fincas
+        cargarGeoJSON("cultivos.geojson", { color: '#FFD700', weight: 1, fillOpacity: 0.5 }, "Cultivos");
+        cargarGeoJSON("Bosques.geojson", { color: '#228B22', weight: 1, fillOpacity: 0.4 }, "Bosques");
+        cargarGeoJSON("fincas.geojson", { color: '#00BFFF', weight: 1 }, "Fincas");
+
+        // Generar resumen y gráfico
+        function filtrarPorFinca() {
+            const codigoFinca = document.getElementById("codigoFinca").value;
+            const resumen = {};
+            let totalArea = 0;
+
+            // Recorrer las capas para encontrar los datos de la finca
+            overlayMaps["Cultivos"].eachLayer(layer => {
+                const { cod_finca, cultivo, has } = layer.feature.properties;
+
+                if (cod_finca === codigoFinca) {
+                    if (!resumen[cultivo]) resumen[cultivo] = 0;
+                    resumen[cultivo] += parseFloat(has) || 0;
+                    totalArea += parseFloat(has) || 0;
+                }
+            });
+
+            mostrarResumen(resumen, totalArea, codigoFinca);
+            generarGrafico(Object.entries(resumen).map(([cultivo, hectareas]) => ({
+                Cultivo: cultivo,
+                Hectareas: hectareas
+            })));
         }
 
-        cargarCultivos();
-        cargarFincas();
+        function mostrarResumen(resumen, totalArea, codigoFinca) {
+            const summaryDiv = document.getElementById("summary");
+            summaryDiv.innerHTML = `<strong>Resumen</strong><br>`;
+            summaryDiv.innerHTML += `<b>Finca:</b> ${codigoFinca}<br>`;
+            summaryDiv.innerHTML += `<b>Área Total:</b> ${totalArea.toFixed(2)} ha<br><br>`;
+
+            for (const [cultivo, hectareas] of Object.entries(resumen)) {
+                summaryDiv.innerHTML += `${cultivo}: ${hectareas.toFixed(2)} ha<br>`;
+            }
+        }
+
+        function generarGrafico(resumen) {
+            const labels = resumen.map(item => item.Cultivo);
+            const data = resumen.map(item => parseFloat(item.Hectareas));
+            const backgroundColors = labels.map(() => '#FFD700');
+
+            const ctx = document.getElementById('chart').getContext('2d');
+            new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{ data, backgroundColor: backgroundColors }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
     </script>
 </body>
 </html>
