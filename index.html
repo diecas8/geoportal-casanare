@@ -72,97 +72,121 @@
 
         baseMaps["OpenStreetMap"].addTo(map);
 
+        let fincasLayer, cultivosLayer, chart, datosFincaSeleccionada = [], datosFincas = [];
         const drawnItems = new L.FeatureGroup();
         map.addLayer(drawnItems);
 
         const drawControl = new L.Control.Draw({
-            edit: {
-                featureGroup: drawnItems,
-                remove: true
-            },
+            edit: { featureGroup: drawnItems, remove: true },
             draw: {
                 polyline: false,
                 circle: false,
-                rectangle: {
-                    shapeOptions: {
-                        color: 'blue'
-                    }
-                },
-                polygon: {
-                    shapeOptions: {
-                        color: 'green'
-                    }
-                },
+                rectangle: { shapeOptions: { color: 'blue' } },
+                polygon: { shapeOptions: { color: 'green' } },
                 marker: true
             }
         });
         map.addControl(drawControl);
 
-        // Calcular área en hectáreas
-        function calcularArea(layer) {
-            if (layer instanceof L.Polygon || layer instanceof L.Rectangle) {
-                const areaMetrosCuadrados = L.GeometryUtil.geodesicArea(layer.getLatLngs()[0]);
-                return (areaMetrosCuadrados / 10000).toFixed(2); // Convertir a hectáreas
-            }
-            return 0;
+        // Cargar GeoJSON de fincas y cultivos
+        function cargarFincas() {
+            fetch("fincas.geojson")
+                .then(response => response.json())
+                .then(data => {
+                    fincasLayer = L.geoJSON(data, {
+                        style: { color: "blue", weight: 2, fillOpacity: 0.1 },
+                        onEachFeature: (feature, layer) => {
+                            const { cod_finca, nom_finca_, area } = feature.properties;
+                            layer.bindPopup(`
+                                <b>Finca:</b> ${nom_finca_}<br>
+                                <b>Código:</b> ${cod_finca}<br>
+                                <b>Área:</b> ${parseFloat(area).toFixed(2)} ha
+                            `);
+                        }
+                    });
+                    fincasLayer.addTo(map);
+                    actualizarListaFincas(data.features);
+                })
+                .catch(error => console.error("Error al cargar las fincas:", error));
         }
 
-        map.on(L.Draw.Event.CREATED, function (e) {
-            const layer = e.layer;
-
-            if (e.layerType === 'marker') {
-                layer.feature = {
-                    type: 'Feature',
-                    properties: {
-                        type: 'Cultivo',
-                        name: prompt("Nombre del cultivo:")
-                    },
-                    geometry: {}
-                };
-            } else if (e.layerType === 'polygon' || e.layerType === 'rectangle') {
-                const areaHectareas = calcularArea(layer);
-                layer.feature = {
-                    type: 'Feature',
-                    properties: {
-                        type: 'Finca',
-                        name: prompt("Nombre de la finca:"),
-                        area: areaHectareas
-                    },
-                    geometry: {}
-                };
-                layer.bindPopup(`
-                    <b>Finca:</b> ${layer.feature.properties.name}<br>
-                    <b>Área:</b> ${areaHectareas} ha
-                `);
-            }
-
-            drawnItems.addLayer(layer);
-        });
-
-        function exportarGeoJSON() {
-            const geojson = drawnItems.toGeoJSON();
-            const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: "application/json" });
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.download = "nuevas_fincas_y_cultivos.geojson";
-            link.click();
+        function cargarCultivos() {
+            fetch("cultivos.geojson")
+                .then(response => response.json())
+                .then(data => {
+                    cultivosLayer = L.geoJSON(data, {
+                        style: feature => ({
+                            color: "#FFD700",
+                            weight: 1,
+                            fillOpacity: 0.5
+                        }),
+                        onEachFeature: (feature, layer) => {
+                            const { cultivo, has, cod_finca } = feature.properties;
+                            layer.bindPopup(`
+                                <b>Cultivo:</b> ${cultivo}<br>
+                                <b>Área:</b> ${parseFloat(has).toFixed(2)} ha<br>
+                                <b>Finca:</b> ${cod_finca}
+                            `);
+                            datosFincas.push({ cod_finca, cultivo, hectareas: has });
+                        }
+                    });
+                    cultivosLayer.addTo(map);
+                })
+                .catch(error => console.error("Error al cargar los cultivos:", error));
         }
 
-        function exportarDatos() {
-            if (!drawnItems.getLayers().length) {
-                alert("No hay datos para exportar. Dibuje o seleccione elementos primero.");
-                return;
-            }
-            const data = drawnItems.toGeoJSON().features.map(feature => ({
-                Tipo: feature.properties.type,
-                Nombre: feature.properties.name || "Sin nombre",
-                Área: feature.properties.area || "N/A"
-            }));
-            const ws = XLSX.utils.json_to_sheet(data);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Datos Dibujos");
-            XLSX.writeFile(wb, "Datos_Dibujos.xlsx");
+        // Generar lista desplegable de fincas
+        function actualizarListaFincas(fincas) {
+            const select = document.getElementById('codigoFinca');
+            fincas.forEach(finca => {
+                const option = document.createElement('option');
+                option.value = finca.properties.cod_finca;
+                option.textContent = finca.properties.nom_finca_;
+                select.appendChild(option);
+            });
         }
+
+        // Filtrar y mostrar resumen
+        function filtrarPorFinca() {
+            const codigoFinca = document.getElementById("codigoFinca").value;
+            const resumen = {};
+            datosFincaSeleccionada = [];
+            cultivosLayer.eachLayer(layer => {
+                const { cod_finca, cultivo, has } = layer.feature.properties;
+                if (cod_finca === codigoFinca) {
+                    if (!resumen[cultivo]) resumen[cultivo] = 0;
+                    resumen[cultivo] += parseFloat(has) || 0;
+                    datosFincaSeleccionada.push({ cultivo, hectareas: parseFloat(has).toFixed(2) });
+                }
+            });
+            mostrarResumen(resumen);
+            generarGrafico(Object.entries(resumen).map(([cultivo, hectareas]) => ({ cultivo, hectareas })));
+        }
+
+        function mostrarResumen(resumen) {
+            const summaryDiv = document.getElementById("summary");
+            summaryDiv.innerHTML = `<strong>Resumen</strong><br>`;
+            for (const [cultivo, hectareas] of Object.entries(resumen)) {
+                summaryDiv.innerHTML += `<b>${cultivo}:</b> ${hectareas.toFixed(2)} ha<br>`;
+            }
+        }
+
+        function generarGrafico(data) {
+            const labels = data.map(d => d.cultivo);
+            const values = data.map(d => d.hectareas);
+            if (chart) chart.destroy();
+            const ctx = document.getElementById('chart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels,
+                    datasets: [{ data: values, backgroundColor: ["#FFD700", "#8B4513", "#32CD32", "#006400"] }]
+                }
+            });
+        }
+
+        cargarFincas();
+        cargarCultivos();
     </script>
 </body>
 </html>
