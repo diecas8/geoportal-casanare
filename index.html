@@ -60,21 +60,14 @@
             "Google Híbrido": L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
                 maxZoom: 20,
                 attribution: '© Google Maps'
-            }),
-            "Esri Mundo Topográfico": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {
-                maxZoom: 20,
-                attribution: '© Esri & contributors'
-            }),
-            "Esri Mundo Imágenes": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                maxZoom: 20,
-                attribution: '© Esri & contributors'
             })
         };
 
         baseMaps["OpenStreetMap"].addTo(map);
         L.control.layers(baseMaps).addTo(map);
 
-        let bosquesLayer, cultivosLayer, chart, datosFincaSeleccionada = [], datosFincas = [];
+        let bosquesLayer, cultivosLayer, fincasLayer, chart, datosFincaSeleccionada = [], datosFincas = [];
+
         const colorMap = {
             'bosque de galería': '#006400',
             'arroz': '#FFD700',
@@ -93,17 +86,10 @@
 
         function cargarBosques() {
             fetch("Bosques.geojson")
-                .then(response => {
-                    if (!response.ok) throw new Error("Error al cargar Bosques.geojson");
-                    return response.json();
-                })
+                .then(response => response.json())
                 .then(data => {
                     bosquesLayer = L.geoJSON(data, {
-                        style: {
-                            color: "darkgreen",
-                            weight: 2,
-                            fillOpacity: 0
-                        }
+                        style: { color: "darkgreen", weight: 2, fillOpacity: 0 }
                     }).addTo(map);
                     bosquesLayer.bringToBack();
                 })
@@ -111,11 +97,8 @@
         }
 
         function cargarCultivos() {
-            fetch("Cultivos.geojson")
-                .then(response => {
-                    if (!response.ok) throw new Error("Error al cargar Cultivos.geojson");
-                    return response.json();
-                })
+            fetch("cultivos.geojson")
+                .then(response => response.json())
                 .then(data => {
                     cultivosLayer = L.geoJSON(data, {
                         style: feature => ({
@@ -146,18 +129,34 @@
                 .catch(error => console.error("Error al cargar la capa de cultivos:", error));
         }
 
+        function cargarFincas() {
+            fetch("fincas.geojson")
+                .then(response => response.json())
+                .then(data => {
+                    fincasLayer = L.geoJSON(data, {
+                        style: { color: "blue", weight: 2, fillOpacity: 0.1 },
+                        onEachFeature: (feature, layer) => {
+                            const { cod_finca, nom_finca_, area } = feature.properties;
+                            layer.bindPopup(`
+                                <b>Finca:</b> ${nom_finca_}<br>
+                                <b>Código:</b> ${cod_finca}<br>
+                                <b>Área:</b> ${parseFloat(area).toFixed(2)} ha
+                            `);
+                        }
+                    }).addTo(map);
+                    fincasLayer.bringToBack();
+                })
+                .catch(error => console.error("Error al cargar la capa de fincas:", error));
+        }
+
         function cargarListaDesplegable() {
             const select = document.getElementById("codigoFinca");
-            select.innerHTML = `<option value="">Seleccione una finca</option>`; // Limpia las opciones
-
+            select.innerHTML = `<option value="">Seleccione una finca</option>`;
             const fincas = [];
 
             datosFincas.forEach(finca => {
                 if (!fincas.find(f => f.codigo === finca.Codigo)) {
-                    fincas.push({
-                        codigo: finca.Codigo,
-                        nombre: finca.Finca
-                    });
+                    fincas.push({ codigo: finca.Codigo, nombre: finca.Finca });
                 }
             });
 
@@ -176,13 +175,10 @@
             const resumen = {};
             datosFincaSeleccionada = [];
             let totalArea = 0;
-            let fincaBounds = L.latLngBounds();
 
             cultivosLayer.eachLayer(layer => {
                 const { cod_finca, cultivo, has } = layer.feature.properties;
-
                 if (cod_finca === codigoFinca) {
-                    fincaBounds.extend(layer.getBounds());
                     if (!resumen[cultivo]) resumen[cultivo] = 0;
                     resumen[cultivo] += parseFloat(has) || 0;
 
@@ -196,18 +192,13 @@
                 }
             });
 
-            if (fincaBounds.isValid()) {
-                map.fitBounds(fincaBounds);
-            }
-
             mostrarResumen(resumen, totalArea, codigoFinca);
             generarGrafico(Object.entries(resumen).map(([cultivo, hectareas]) => ({ Cultivo: cultivo, Hectareas: hectareas })));
         }
 
         function mostrarResumen(resumen, totalArea, codigoFinca) {
             const summaryDiv = document.getElementById("summary");
-            summaryDiv.innerHTML = `<
-                        <strong>Resumen</strong><br>`;
+            summaryDiv.innerHTML = `<strong>Resumen</strong><br>`;
             summaryDiv.innerHTML += `<b>Finca:</b> ${codigoFinca}<br>`;
             summaryDiv.innerHTML += `<b>Área Total:</b> ${totalArea.toFixed(2)} ha<br><br>`;
 
@@ -249,7 +240,6 @@
         function resaltarCultivoEnMapa(cultivo) {
             cultivosLayer.eachLayer(layer => {
                 const { cultivo: layerCultivo } = layer.feature.properties;
-
                 if (layerCultivo?.toLowerCase() === cultivo.toLowerCase()) {
                     layer.setStyle({ color: 'yellow', weight: 3 });
                 } else {
@@ -276,7 +266,7 @@
 
         cargarBosques();
         cargarCultivos();
+        cargarFincas();
     </script>
 </body>
 </html>
-
