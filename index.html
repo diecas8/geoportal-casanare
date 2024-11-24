@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Geoportal con Resumen y Gráficos</title>
+    <title>Geoportal con Resumen, Gráficos y Edición</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
@@ -42,6 +44,9 @@
         <div class="export-container">
             <button onclick="exportarDatos()">Exportar Datos de la Finca</button>
         </div>
+        <div class="export-container">
+            <button onclick="exportarGeoJSON()">Exportar GeoJSON</button>
+        </div>
     </div>
     <div id="map"></div>
 
@@ -58,22 +63,81 @@
         baseMaps["OpenStreetMap"].addTo(map);
 
         let cultivosLayer, chart, datosFincaSeleccionada = [], datosFincas = [];
+        const drawnItems = new L.FeatureGroup(); // Capa para los elementos dibujados por el usuario
+        map.addLayer(drawnItems);
 
-        const colorMap = {
-            'bosque de galería': '#006400',
-            'arroz': '#FFD700',
-            'pasto limpio': '#D2B48C',
-            'pasto arbolado': '#FF6347',
-            'pasto enmalezado': '#ADFF2F',
-            'palma aceite': '#CD853F',
-            'cacao': '#8B4513',
-            'maíz': '#FFD700',
-            'banano': '#228B22',
-            'plátano': '#32CD32',
-            'café': '#8B0000',
-            'papaya': '#FFA500',
-            'otros': '#FF0000'
-        };
+        // Control de dibujo
+        const drawControl = new L.Control.Draw({
+            edit: {
+                featureGroup: drawnItems,
+                remove: true
+            },
+            draw: {
+                polyline: false,
+                circle: false,
+                rectangle: false,
+                polygon: {
+                    shapeOptions: {
+                        color: 'blue'
+                    }
+                },
+                marker: {
+                    icon: L.icon({
+                        iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
+                        iconSize: [25, 41],
+                        iconAnchor: [12, 41]
+                    })
+                }
+            }
+        });
+        map.addControl(drawControl);
+
+        // Evento para capturar nuevos dibujos
+        map.on(L.Draw.Event.CREATED, function (e) {
+            const layer = e.layer;
+
+            // Pedir atributos al usuario
+            const tipo = e.layerType === 'marker' ? 'Cultivo' : 'Finca';
+            const nombre = prompt(`Nombre del ${tipo}:`) || 'Sin nombre';
+            const propietario = prompt(`Propietario del ${tipo}:`) || 'Sin propietario';
+            let hectareas = 0;
+
+            if (e.layerType === 'polygon') {
+                const area = L.GeometryUtil.geodesicArea(layer.getLatLngs()[0]);
+                hectareas = (area / 10000).toFixed(2); // Convertir m² a hectáreas
+            }
+
+            // Añadir propiedades al GeoJSON de la capa
+            layer.feature = {
+                type: 'Feature',
+                properties: {
+                    tipo: tipo,
+                    nombre: nombre,
+                    propietario: propietario,
+                    hectareas: hectareas || 'N/A'
+                },
+                geometry: {}
+            };
+
+            // Mostrar un popup con los atributos
+            layer.bindPopup(`
+                <b>Tipo:</b> ${tipo}<br>
+                <b>Nombre:</b> ${nombre}<br>
+                <b>Propietario:</b> ${propietario}<br>
+                <b>Hectáreas:</b> ${hectareas}
+            `);
+
+            drawnItems.addLayer(layer);
+        });
+
+        function exportarGeoJSON() {
+            const geojson = drawnItems.toGeoJSON();
+            const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: "application/json" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "fincas_y_cultivos.geojson";
+            link.click();
+        }
 
         function cargarCultivos() {
             fetch("cultivos.geojson")
@@ -81,7 +145,7 @@
                 .then(data => {
                     cultivosLayer = L.geoJSON(data, {
                         style: feature => ({
-                            color: colorMap[feature.properties.cultivo?.toLowerCase()] || 'gray',
+                            color: '#FFD700',
                             weight: 1,
                             fillOpacity: 0.5
                         }),
@@ -188,7 +252,7 @@
         function generarGrafico(resumen) {
             const labels = resumen.map(item => item.Cultivo);
             const data = resumen.map(item => parseFloat(item.Hectareas));
-            const backgroundColors = labels.map(label => colorMap[label.toLowerCase()] || 'gray');
+            const backgroundColors = labels.map(label => '#FFD700');
 
             if (chart) chart.destroy();
             const ctx = document.getElementById('chart').getContext('2d');
