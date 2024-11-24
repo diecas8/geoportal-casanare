@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Geoportal con Atributos para Nuevas Fincas</title>
+    <title>Geoportal con Dibujo y Exportación</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -70,9 +70,15 @@
 
         baseMaps["OpenStreetMap"].addTo(map);
 
-        let drawnItems = new L.FeatureGroup();
+        let bosquesLayer, cultivosLayer, fincasLayer, chart, datosFincaSeleccionada = [], datosFincas = [];
+        const overlayMaps = {}; // Capas dinámicas para el control de capas
+        let controlCapas = null; // Variable para evitar múltiples controles
+
+        // Grupo de capas dibujadas por el usuario
+        const drawnItems = new L.FeatureGroup();
         map.addLayer(drawnItems);
 
+        // Control de dibujo
         const drawControl = new L.Control.Draw({
             edit: {
                 featureGroup: drawnItems,
@@ -96,17 +102,17 @@
         });
         map.addControl(drawControl);
 
-        // Manejar el evento de creación de nuevas geometrías
+        // Evento: Cuando se crea una nueva capa
         map.on(L.Draw.Event.CREATED, function (e) {
             const layer = e.layer;
 
             // Solicitar atributos al usuario
-            const nombre = prompt("Nombre de la finca o cultivo:");
-            const propietario = prompt("Nombre del propietario:");
-            const hectareas = prompt("Hectáreas (área estimada):");
             const tipo = e.layerType === 'marker' ? 'Cultivo' : 'Finca';
+            const nombre = prompt("Nombre del " + tipo + ":");
+            const propietario = prompt("Propietario del " + tipo + ":");
+            const hectareas = e.layerType === 'marker' ? null : prompt("Hectáreas (área estimada):");
 
-            // Asignar los atributos a la capa creada
+            // Asignar atributos al GeoJSON de la capa
             layer.feature = {
                 type: 'Feature',
                 properties: {
@@ -121,8 +127,8 @@
             // Mostrar un popup con los atributos ingresados
             layer.bindPopup(`
                 <b>Tipo:</b> ${tipo}<br>
-                <b>Nombre:</b> ${nombre}<br>
-                <b>Propietario:</b> ${propietario}<br>
+                <b>Nombre:</b> ${nombre || 'Sin nombre'}<br>
+                <b>Propietario:</b> ${propietario || 'Sin propietario'}<br>
                 <b>Hectáreas:</b> ${hectareas || 'N/A'}
             `);
 
@@ -155,9 +161,7 @@
             'otros': '#FF0000'
         };
 
-        // Aquí permanecen las funciones existentes como cargarBosques, cargarCultivos, cargarFincas, filtrarPorFinca, mostrarResumen, etc.
-        // Mantén estas funciones sin modificaciones porque ya funcionan correctamente.
-
+        // Aquí permanecen las funciones existentes como cargarBosques, cargarCultivos, cargarFincas, filtrarPorFinca, mostrarResumen, generarGrafico, etc.
         cargarBosques();
         cargarCultivos();
         cargarFincas();
