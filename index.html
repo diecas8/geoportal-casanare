@@ -107,24 +107,24 @@
             const layer = e.layer;
             const areaInHectares = calculateArea(e.layer);
 
-            const propietario = prompt("Propietario:");
-            const cultivo = prompt("Cultivo:");
+            const propietario = prompt("Ingrese el nombre del propietario:");
+            const cultivo = prompt("Ingrese el tipo de cultivo:");
             const hectareas = areaInHectares ? areaInHectares.toFixed(2) : "N/A";
 
             layer.feature = {
                 type: 'Feature',
                 properties: {
-                    type: e.layerType,
-                    propietario: propietario || "Desconocido",
-                    cultivo: cultivo || "Sin especificar",
+                    tipo: e.layerType,
+                    propietario: propietario || "No especificado",
+                    cultivo: cultivo || "No especificado",
                     hectareas: hectareas
                 },
                 geometry: {}
             };
 
             layer.bindPopup(`
-                <b>Propietario:</b> ${propietario || "Desconocido"}<br>
-                <b>Cultivo:</b> ${cultivo || "Sin especificar"}<br>
+                <b>Propietario:</b> ${propietario || "No especificado"}<br>
+                <b>Cultivo:</b> ${cultivo || "No especificado"}<br>
                 <b>Hectáreas:</b> ${hectareas} ha
             `);
 
