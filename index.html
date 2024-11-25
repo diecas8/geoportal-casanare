@@ -75,8 +75,18 @@
         const drawnItems = new L.FeatureGroup();
         map.addLayer(drawnItems);
 
-        const overlayMaps = {}; // Para las capas cargadas dinámicamente
+        const overlayMaps = {};
         let fincasLayer, cultivosLayer, chart, controlCapas, datosFincas = [], datosFincaSeleccionada = [];
+
+        const colorMap = {
+            "cacao": "#8B4513",
+            "arroz": "#FFD700",
+            "maíz": "#FFA500",
+            "plátano": "#32CD32",
+            "café": "#8B0000",
+            "pasto enmalezado": "#32CD32",
+            "otros": "#696969"
+        };
 
         const drawControl = new L.Control.Draw({
             edit: { featureGroup: drawnItems, remove: true },
@@ -122,7 +132,11 @@
                 .then(response => response.json())
                 .then(data => {
                     cultivosLayer = L.geoJSON(data, {
-                        style: { color: "#FFD700", weight: 1, fillOpacity: 0.5 },
+                        style: feature => ({
+                            color: colorMap[feature.properties.cultivo?.toLowerCase()] || "#696969",
+                            weight: 1,
+                            fillOpacity: 0.5
+                        }),
                         onEachFeature: (feature, layer) => {
                             const { cultivo, has, cod_finca } = feature.properties;
                             layer.bindPopup(`
@@ -154,9 +168,12 @@
             cultivosLayer.eachLayer(layer => {
                 const { cod_finca, cultivo, has } = layer.feature.properties;
                 if (cod_finca === codigoFinca) {
+                    layer.setStyle({ opacity: 1, fillOpacity: 0.5 });
                     if (!resumen[cultivo]) resumen[cultivo] = 0;
                     resumen[cultivo] += parseFloat(has) || 0;
                     datosFincaSeleccionada.push({ cultivo, hectareas: parseFloat(has).toFixed(2) });
+                } else {
+                    layer.setStyle({ opacity: 0, fillOpacity: 0 });
                 }
             });
             mostrarResumen(resumen);
@@ -174,13 +191,14 @@
         function generarGrafico(data) {
             const labels = data.map(d => d.cultivo);
             const values = data.map(d => d.hectareas);
+            const backgroundColors = labels.map(label => colorMap[label.toLowerCase()] || "#696969");
             if (chart) chart.destroy();
             const ctx = document.getElementById('chart').getContext('2d');
             chart = new Chart(ctx, {
                 type: 'pie',
                 data: {
                     labels,
-                    datasets: [{ data: values, backgroundColor: ["#FFD700", "#8B4513", "#32CD32", "#006400"] }]
+                    datasets: [{ data: values, backgroundColor: backgroundColors }]
                 }
             });
         }
