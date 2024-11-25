@@ -76,7 +76,7 @@
         map.addLayer(drawnItems);
 
         const overlayMaps = {};
-        let fincasLayer, cultivosLayer, chart, controlCapas, datosFincas = [], datosFincaSeleccionada = [];
+        let fincasLayer, cultivosLayer, bosquesLayer, chart, controlCapas, datosFincas = [], datosFincaSeleccionada = [];
 
         const colorMap = {
             "cacao": "#8B4513",
@@ -84,7 +84,7 @@
             "maíz": "#FFA500",
             "plátano": "#32CD32",
             "café": "#8B0000",
-            "pasto enmalezado": "#32CD32",
+            "pasto enmalezado": "#006400",
             "otros": "#696969"
         };
 
@@ -99,11 +99,6 @@
             }
         });
         map.addControl(drawControl);
-
-        map.on(L.Draw.Event.CREATED, function (e) {
-            const layer = e.layer;
-            drawnItems.addLayer(layer);
-        });
 
         function cargarFincas() {
             fetch("fincas.geojson")
@@ -147,6 +142,21 @@
                         }
                     }).addTo(map);
                     overlayMaps["Cultivos"] = cultivosLayer;
+                    actualizarControlCapas();
+                });
+        }
+
+        function cargarBosques() {
+            fetch("Bosques.geojson")
+                .then(response => response.json())
+                .then(data => {
+                    bosquesLayer = L.geoJSON(data, {
+                        style: { color: "darkgreen", weight: 1, dashArray: '4', fillOpacity: 0 },
+                        onEachFeature: (feature, layer) => {
+                            layer.bindPopup("<b>Área de bosque</b>");
+                        }
+                    }).addTo(map);
+                    overlayMaps["Bosques"] = bosquesLayer;
                     actualizarControlCapas();
                 });
         }
@@ -210,6 +220,7 @@
 
         cargarFincas();
         cargarCultivos();
+        cargarBosques();
     </script>
 </body>
 </html>
