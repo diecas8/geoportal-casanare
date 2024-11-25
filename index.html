@@ -79,13 +79,16 @@
         let fincasLayer, cultivosLayer, bosquesLayer, chart, controlCapas, datosFincas = [], datosFincaSeleccionada = [];
 
         const colorMap = {
-            "cacao": "#8B4513",
-            "arroz": "#FFD700",
-            "maíz": "#FFA500",
-            "plátano": "#32CD32",
-            "café": "#8B0000",
-            "pasto enmalezado": "#006400",
-            "otros": "#696969"
+            "bosque de galería": "#6b8e23",
+            "pasto limpio": "#3cb371",
+            "otros": "#d2691e",
+            "palma aceite": "#ffa07a",
+            "pasto enmalezado": "#2e8b57",
+            "cacao": "#8b4513",
+            "arroz": "#ffd700",
+            "maíz": "#ff8c00",
+            "plátano": "#32cd32",
+            "café": "#8b0000"
         };
 
         const drawControl = new L.Control.Draw({
@@ -175,10 +178,12 @@
             const codigoFinca = document.getElementById("codigoFinca").value;
             const resumen = {};
             datosFincaSeleccionada = [];
+            let fincaBounds = L.latLngBounds();
             cultivosLayer.eachLayer(layer => {
                 const { cod_finca, cultivo, has } = layer.feature.properties;
                 if (cod_finca === codigoFinca) {
                     layer.setStyle({ opacity: 1, fillOpacity: 0.5 });
+                    fincaBounds.extend(layer.getBounds());
                     if (!resumen[cultivo]) resumen[cultivo] = 0;
                     resumen[cultivo] += parseFloat(has) || 0;
                     datosFincaSeleccionada.push({ cultivo, hectareas: parseFloat(has).toFixed(2) });
@@ -186,6 +191,9 @@
                     layer.setStyle({ opacity: 0, fillOpacity: 0 });
                 }
             });
+
+            if (fincaBounds.isValid()) map.fitBounds(fincaBounds);
+
             mostrarResumen(resumen);
             generarGrafico(Object.entries(resumen).map(([cultivo, hectareas]) => ({ cultivo, hectareas })));
         }
