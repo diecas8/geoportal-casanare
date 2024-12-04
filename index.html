@@ -205,13 +205,14 @@
                 .then(response => response.json())
                 .then(data => {
                     fincasLayer = L.geoJSON(data, {
-                        style: { color: "blue", weight: 2, fillOpacity: 0 }
-                    });
-                    overlayMaps["Fincas"] = fincasLayer;
-                    fincasLayer.addTo(map);
-                    actualizarControlCapas();
-                })
-                .catch(error => console.error("Error al cargar la capa de fincas:", error));
+                        style: { color: "blue", weight: 2, fillOpacity: 0.1 },
+                        onEachFeature: (feature, layer) => {
+                            const { cod_finca, nom_finca_, area } = feature.properties;
+                            layer.bindPopup(`
+                                <b>Finca:</b> ${nom_finca_}<br>
+                                <b>Código:</b> ${cod_finca}<br>
+                                <b>Área:</b> ${parseFloat(area).toFixed(2)} ha
+
         }
 
         function actualizarControlCapas() {
