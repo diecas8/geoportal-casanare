@@ -49,252 +49,231 @@
         </div>
     </div>
     <div id="map"></div>
+<script>
+    const map = L.map('map').setView([5.5, -73.0], 6);
 
-    <script>
-        const map = L.map('map').setView([5.5, -73.0], 6);
+    const baseMaps = {
+        "OpenStreetMap": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        }),
+        "Google Satélite": L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+            maxZoom: 20,
+            attribution: '© Google Maps'
+        }),
+        "Google Híbrido": L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+            maxZoom: 20,
+            attribution: '© Google Maps'
+        })
+    };
 
-        const baseMaps = {
-            "OpenStreetMap": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19,
-                attribution: '© OpenStreetMap contributors'
-            }),
-            "Google Satélite": L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
-                maxZoom: 20,
-                attribution: '© Google Maps'
-            }),
-            "Google Híbrido": L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
-                maxZoom: 20,
-                attribution: '© Google Maps'
-            })
-        };
+    baseMaps["OpenStreetMap"].addTo(map);
 
-        baseMaps["OpenStreetMap"].addTo(map);
+    let bosquesLayer, cultivosLayer, fincasLayer, chart, datosFincaSeleccionada = [], datosFincas = [];
+    const overlayMaps = {}; // Capas dinámicas para el control de capas
+    let controlCapas = null; // Variable para evitar múltiples controles
 
-        let bosquesLayer, cultivosLayer, fincasLayer, chart, datosFincaSeleccionada = [], datosFincas = [];
-        const overlayMaps = {}; // Capas dinámicas para el control de capas
-        let controlCapas = null; // Variable para evitar múltiples controles
+    const drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
 
-        const drawnItems = new L.FeatureGroup();
-        map.addLayer(drawnItems);
-
-        const drawControl = new L.Control.Draw({
-            edit: {
-                featureGroup: drawnItems,
-                remove: true
+    const drawControl = new L.Control.Draw({
+        edit: {
+            featureGroup: drawnItems,
+            remove: true
+        },
+        draw: {
+            polyline: false,
+            circle: false,
+            rectangle: {
+                shapeOptions: {
+                    color: 'blue'
+                }
             },
-            draw: {
-                polyline: false,
-                circle: false,
-                rectangle: {
-                    shapeOptions: {
-                        color: 'blue'
-                    }
+            polygon: {
+                shapeOptions: {
+                    color: 'green'
+                }
+            },
+            marker: true
+        }
+    });
+    map.addControl(drawControl);
+
+    map.on(L.Draw.Event.CREATED, function (e) {
+        const layer = e.layer;
+
+        if (e.layerType === 'marker') {
+            layer.feature = {
+                type: 'Feature',
+                properties: {
+                    type: 'Cultivo',
+                    name: prompt("Nombre del cultivo:")
                 },
-                polygon: {
-                    shapeOptions: {
-                        color: 'green'
-                    }
+                geometry: {}
+            };
+        } else if (e.layerType === 'polygon' || e.layerType === 'rectangle') {
+            layer.feature = {
+                type: 'Feature',
+                properties: {
+                    type: 'Finca',
+                    name: prompt("Nombre de la finca:")
                 },
-                marker: true
-            }
-        });
-        map.addControl(drawControl);
-
-        map.on(L.Draw.Event.CREATED, function (e) {
-            const layer = e.layer;
-
-            if (e.layerType === 'marker') {
-                layer.feature = {
-                    type: 'Feature',
-                    properties: {
-                        type: 'Cultivo',
-                        name: prompt("Nombre del cultivo:")
-                    },
-                    geometry: {}
-                };
-            } else if (e.layerType === 'polygon' || e.layerType === 'rectangle') {
-                layer.feature = {
-                    type: 'Feature',
-                    properties: {
-                        type: 'Finca',
-                        name: prompt("Nombre de la finca:")
-                    },
-                    geometry: {}
-                };
-            }
-
-            drawnItems.addLayer(layer);
-        });
-
-        function exportarGeoJSON() {
-            const geojson = drawnItems.toGeoJSON();
-            const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: "application/json" });
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.download = "nuevas_fincas_y_cultivos.geojson";
-            link.click();
+                geometry: {}
+            };
         }
 
-        const colorMap = {
-            'bosque de galería': '#006400',
-            'arroz': '#FFD700',
-            'pasto limpio': '#D2B48C',
-            'pasto arbolado': '#FF6347',
-            'pasto enmalezado': '#ADFF2F',
-            'palma aceite': '#CD853F',
-            'cacao': '#8B4513',
-            'maíz': '#FFD700',
-            'banano': '#228B22',
-            'plátano': '#32CD32',
-            'café': '#8B0000',
-            'papaya': '#FFA500',
-            'otros': '#FF0000'
-        };
+        drawnItems.addLayer(layer);
+    });
 
-        function cargarBosques() {
-            fetch("Bosques.geojson")
-                .then(response => response.json())
-                .then(data => {
-                    bosquesLayer = L.geoJSON(data, {
-                        style: { color: "darkgreen", weight: 2, fillOpacity: 0 }
-                    });
-                    overlayMaps["Bosques"] = bosquesLayer;
-                    bosquesLayer.addTo(map);
-                    actualizarControlCapas();
-                })
-                .catch(error => console.error("Error al cargar la capa de bosques:", error));
-        }
+    function exportarGeoJSON() {
+        const geojson = drawnItems.toGeoJSON();
+        const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: "application/json" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "nuevas_fincas_y_cultivos.geojson";
+        link.click();
+    }
 
-        function cargarCultivos() {
-            fetch("cultivos.geojson")
-                .then(response => response.json())
-                .then(data => {
-                    cultivosLayer = L.geoJSON(data, {
-                        style: feature => ({
-                            color: colorMap[feature.properties.cultivo?.toLowerCase()] || 'gray',
-                            weight: 1,
-                            fillOpacity: 0.5
-                        }),
-                        onEachFeature: (feature, layer) => {
-                            const { cod_finca, nom_finca_, cultivo, has } = feature.properties;
+    // Función para cargar las capas de Bosques, Cultivos y Fincas
+    function cargarBosques() {
+        fetch("Bosques.geojson")
+            .then(response => response.json())
+            .then(data => {
+                bosquesLayer = L.geoJSON(data, {
+                    style: { color: "darkgreen", weight: 2, fillOpacity: 0 }
+                });
+                overlayMaps["Bosques"] = bosquesLayer;
+                bosquesLayer.addTo(map);
+                actualizarControlCapas();
+            })
+            .catch(error => console.error("Error al cargar la capa de bosques:", error));
+    }
 
-                            layer.bindPopup(`
-                                <b>Cultivo:</b> ${cultivo}<br>
-                                <b>Área:</b> ${parseFloat(has).toFixed(2)} ha<br>
-                                <b>Finca:</b> ${nom_finca_}
-                            `);
+    function cargarCultivos() {
+        fetch("cultivos.geojson")
+            .then(response => response.json())
+            .then(data => {
+                cultivosLayer = L.geoJSON(data, {
+                    style: feature => ({
+                        color: colorMap[feature.properties.cultivo?.toLowerCase()] || 'gray',
+                        weight: 1,
+                        fillOpacity: 0.5
+                    }),
+                    onEachFeature: (feature, layer) => {
+                        const { cod_finca, nom_finca_, cultivo, has } = feature.properties;
 
-                            datosFincas.push({
-                                Codigo: cod_finca,
-                                Finca: nom_finca_,
-                                Cultivo: cultivo,
-                                Hectareas: has
-                            });
-                        }
-                    });
-                    overlayMaps["Cultivos"] = cultivosLayer;
-                    cultivosLayer.addTo(map);
-                    cargarListaDesplegable();
-                    actualizarControlCapas();
-                })
-                .catch(error => console.error("Error al cargar la capa de cultivos:", error));
-        }
+                        layer.bindPopup(`
+                            <b>Cultivo:</b> ${cultivo}<br>
+                            <b>Área:</b> ${parseFloat(has).toFixed(2)} ha<br>
+                            <b>Finca:</b> ${nom_finca_}
+                        `);
 
-        function cargarFincas() {
-            fetch("fincas.geojson")
-                .then(response => response.json())
-                .then(data => {
-                    fincasLayer = L.geoJSON(data, {
-                        style: { color: "blue", weight: 2, fillOpacity: 0.1 },
-                        onEachFeature: (feature, layer) => {
-                            const { cod_finca, nom_finca_, area } = feature.properties;
-                            layer.bindPopup(`
-                                <b>Finca:</b> ${nom_finca_}<br>
-                                <b>Código:</b> ${cod_finca}<br>
-                                <b>Área:</b> ${parseFloat(area).toFixed(2)} ha
-
-        }
-
-        function actualizarControlCapas() {
-            if (controlCapas) {
-                map.removeControl(controlCapas);
-            }
-            controlCapas = L.control.layers(baseMaps, overlayMaps).addTo(map);
-        }
-
-        function cargarListaDesplegable() {
-            const select = document.getElementById('codigoFinca');
-            const codigosFinca = Array.from(new Set(datosFincas.map(d => d.Codigo)));
-            select.innerHTML = "<option value=''>Seleccione una finca</option>";
-            codigosFinca.forEach(codigo => {
-                const finca = datosFincas.find(d => d.Codigo === codigo);
-                const option = document.createElement("option");
-                option.value = finca.Codigo;
-                option.textContent = finca.Finca;
-                select.appendChild(option);
-            });
-        }
-
-        function filtrarPorFinca() {
-            const codigo = document.getElementById('codigoFinca').value;
-            if (codigo) {
-                datosFincaSeleccionada = datosFincas.filter(finca => finca.Codigo === codigo);
-                mostrarResumen();
-                mostrarGrafico();
-            }
-        }
-
-        function mostrarResumen() {
-            const finca = datosFincaSeleccionada[0];
-            const summaryDiv = document.getElementById('summary');
-            summaryDiv.innerHTML = `
-                <strong>Resumen de la Finca</strong>
-                <p><b>Finca:</b> ${finca.Finca}</p>
-                <p><b>Cultivo:</b> ${finca.Cultivo}</p>
-                <p><b>Área:</b> ${finca.Hectareas} hectáreas</p>
-            `;
-        }
-
-        function mostrarGrafico() {
-            const finca = datosFincaSeleccionada[0];
-            if (!chart) {
-                chart = new Chart(document.getElementById('chart').getContext('2d'), {
-                    type: 'bar',
-                    data: {
-                        labels: ['Área'],
-                        datasets: [{
-                            label: finca.Finca,
-                            data: [finca.Hectareas],
-                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                            borderColor: 'rgba(75, 192, 192, 1)',
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        scales: {
-                            y: {
-                                beginAtZero: true
-                            }
-                        }
+                        datosFincas.push({
+                            Codigo: cod_finca,
+                            Finca: nom_finca_,
+                            Cultivo: cultivo,
+                            Hectareas: has
+                        });
                     }
                 });
-            } else {
-                chart.data.datasets[0].data = [finca.Hectareas];
-                chart.update();
+                overlayMaps["Cultivos"] = cultivosLayer;
+                cultivosLayer.addTo(map);
+                cargarListaDesplegable();
+                actualizarControlCapas();
+            })
+            .catch(error => console.error("Error al cargar la capa de cultivos:", error));
+    }
+
+    function cargarFincas() {
+        fetch("fincas.geojson")
+            .then(response => response.json())
+            .then(data => {
+                fincasLayer = L.geoJSON(data, {
+                    style: { color: "blue", weight: 2, fillOpacity: 0.1 },
+                    onEachFeature: (feature, layer) => {
+                        const { cod_finca, nom_finca_, area } = feature.properties;
+                        layer.bindPopup(`
+                            <b>Finca:</b> ${nom_finca_}<br>
+                            <b>Código:</b> ${cod_finca}<br>
+                            <b>Área:</b> ${parseFloat(area).toFixed(2)} ha
+                        `);
+                    }
+                });
+                overlayMaps["Fincas"] = fincasLayer;
+                fincasLayer.addTo(map);
+                actualizarControlCapas();
+            })
+            .catch(error => console.error("Error al cargar la capa de fincas:", error));
+    }
+
+    function actualizarControlCapas() {
+        if (controlCapas) {
+            map.removeControl(controlCapas);
+        }
+        controlCapas = L.control.layers(baseMaps, overlayMaps).addTo(map);
+    }
+
+    function cargarListaDesplegable() {
+        const select = document.getElementById("codigoFinca");
+        datosFincas.forEach(finca => {
+            const option = document.createElement("option");
+            option.value = finca.Codigo;
+            option.textContent = finca.Finca;
+            select.appendChild(option);
+        });
+    }
+</script>
+<script>
+    function filtrarPorFinca() {
+        const codigo = document.getElementById("codigoFinca").value;
+        const fincaSeleccionada = datosFincas.filter(finca => finca.Codigo === codigo);
+        if (fincaSeleccionada.length > 0) {
+            mostrarResumen(fincaSeleccionada[0]);
+        }
+    }
+
+    function mostrarResumen(finca) {
+        const summaryDiv = document.getElementById("summary");
+        summaryDiv.innerHTML = `
+            <strong>Resumen Finca: ${finca.Finca}</strong><br>
+            <b>Cultivo:</b> ${finca.Cultivo}<br>
+            <b>Área:</b> ${finca.Hectareas} ha
+        `;
+        datosFincaSeleccionada = finca;
+        cargarGrafico();
+    }
+
+    function cargarGrafico() {
+        if (!datosFincaSeleccionada || !chart) return;
+
+        chart.destroy();
+        chart = new Chart(document.getElementById("chart"), {
+            type: 'bar',
+            data: {
+                labels: [datosFincaSeleccionada.Finca],
+                datasets: [{
+                    label: 'Área (ha) de Cultivo',
+                    data: [datosFincaSeleccionada.Hectareas],
+                    backgroundColor: '#FFD700',
+                    borderColor: '#FF6347',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: { beginAtZero: true }
+                }
             }
-        }
+        });
+    }
 
-        function exportarDatos() {
-            const wb = XLSX.utils.book_new();
-            const ws = XLSX.utils.json_to_sheet(datosFincaSeleccionada);
-            XLSX.utils.book_append_sheet(wb, ws, "Datos Finca");
-            XLSX.writeFile(wb, "datos_finca.xlsx");
-        }
-
-        cargarBosques();
-        cargarCultivos();
-        cargarFincas();
-    </script>
+    function exportarDatos() {
+        const ws = XLSX.utils.json_to_sheet([datosFincaSeleccionada]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Finca");
+        XLSX.writeFile(wb, "Finca_Datos.xlsx");
+    }
+</script>
 </body>
 </html>
