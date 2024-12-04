@@ -205,15 +205,7 @@
                 .then(response => response.json())
                 .then(data => {
                     fincasLayer = L.geoJSON(data, {
-                        style: { color: "blue", weight: 2, fillOpacity: 0.1 },
-                        onEachFeature: (feature, layer) => {
-                            const { cod_finca, nom_finca_, area } = feature.properties;
-                            layer.bindPopup(`
-                                <b>Finca:</b> ${nom_finca_}<br>
-                                <b>Código:</b> ${cod_finca}<br>
-                                <b>Área:</b> ${parseFloat(area).toFixed(2)} ha
-                            `);
-                        }
+                        style: { color: "blue", weight: 2, fillOpacity: 0 }
                     });
                     overlayMaps["Fincas"] = fincasLayer;
                     fincasLayer.addTo(map);
@@ -223,110 +215,80 @@
         }
 
         function actualizarControlCapas() {
-            if (controlCapas) map.removeControl(controlCapas);
-            controlCapas = L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(map);
+            if (controlCapas) {
+                map.removeControl(controlCapas);
+            }
+            controlCapas = L.control.layers(baseMaps, overlayMaps).addTo(map);
         }
 
         function cargarListaDesplegable() {
-            const select = document.getElementById("codigoFinca");
-            select.innerHTML = `<option value="">Seleccione una finca</option>`;
-            const fincas = [];
-
-            datosFincas.forEach(finca => {
-                if (!fincas.find(f => f.codigo === finca.Codigo)) {
-                    fincas.push({ codigo: finca.Codigo, nombre: finca.Finca });
-                }
-            });
-
-            fincas.sort((a, b) => a.codigo.localeCompare(b.codigo));
-
-            fincas.forEach(finca => {
+            const select = document.getElementById('codigoFinca');
+            const codigosFinca = Array.from(new Set(datosFincas.map(d => d.Codigo)));
+            select.innerHTML = "<option value=''>Seleccione una finca</option>";
+            codigosFinca.forEach(codigo => {
+                const finca = datosFincas.find(d => d.Codigo === codigo);
                 const option = document.createElement("option");
-                option.value = finca.codigo;
-                option.textContent = `${finca.codigo} (${finca.nombre})`;
+                option.value = finca.Codigo;
+                option.textContent = finca.Finca;
                 select.appendChild(option);
             });
         }
 
         function filtrarPorFinca() {
-            const codigoFinca = document.getElementById("codigoFinca").value;
-            const resumen = {};
-            datosFincaSeleccionada = [];
-            let totalArea = 0;
-            let fincaBounds = L.latLngBounds();
-
-            cultivosLayer.eachLayer(layer => {
-                const { cod_finca, cultivo, has } = layer.feature.properties;
-
-                if (cod_finca === codigoFinca) {
-                    layer.setStyle({ opacity: 1, fillOpacity: 0.5 });
-                    fincaBounds.extend(layer.getBounds());
-
-                    if (!resumen[cultivo]) resumen[cultivo] = 0;
-                    resumen[cultivo] += parseFloat(has) || 0;
-
-                    datosFincaSeleccionada.push({
-                        Codigo: cod_finca,
-                        Cultivo: cultivo,
-                        Hectareas: parseFloat(has).toFixed(2)
-                    });
-
-                    totalArea += parseFloat(has) || 0;
-                } else {
-                    layer.setStyle({ opacity: 0, fillOpacity: 0 });
-                }
-            });
-
-            if (fincaBounds.isValid()) map.fitBounds(fincaBounds);
-
-            mostrarResumen(resumen, totalArea, codigoFinca);
-            generarGrafico(Object.entries(resumen).map(([cultivo, hectareas]) => ({ Cultivo: cultivo, Hectareas: hectareas })));
-        }
-
-        function mostrarResumen(resumen, totalArea, codigoFinca) {
-            const summaryDiv = document.getElementById("summary");
-            summaryDiv.innerHTML = `<strong>Resumen</strong><br>`;
-            summaryDiv.innerHTML += `<b>Finca:</b> ${codigoFinca}<br>`;
-            summaryDiv.innerHTML += `<b>Área Total:</b> ${totalArea.toFixed(2)} ha<br><br>`;
-
-            for (const [cultivo, hectareas] of Object.entries(resumen)) {
-                summaryDiv.innerHTML += `${cultivo}: ${hectareas.toFixed(2)} ha<br>`;
+            const codigo = document.getElementById('codigoFinca').value;
+            if (codigo) {
+                datosFincaSeleccionada = datosFincas.filter(finca => finca.Codigo === codigo);
+                mostrarResumen();
+                mostrarGrafico();
             }
         }
 
-        function generarGrafico(resumen) {
-            const labels = resumen.map(item => item.Cultivo);
-            const data = resumen.map(item => parseFloat(item.Hectareas));
-            const backgroundColors = labels.map(label => colorMap[label.toLowerCase()] || 'gray');
+        function mostrarResumen() {
+            const finca = datosFincaSeleccionada[0];
+            const summaryDiv = document.getElementById('summary');
+            summaryDiv.innerHTML = `
+                <strong>Resumen de la Finca</strong>
+                <p><b>Finca:</b> ${finca.Finca}</p>
+                <p><b>Cultivo:</b> ${finca.Cultivo}</p>
+                <p><b>Área:</b> ${finca.Hectareas} hectáreas</p>
+            `;
+        }
 
-            if (chart) chart.destroy();
-            const ctx = document.getElementById('chart').getContext('2d');
-            chart = new Chart(ctx, {
-                type: 'pie',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        data: data,
-                        backgroundColor: backgroundColors
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false
-                }
-            });
+        function mostrarGrafico() {
+            const finca = datosFincaSeleccionada[0];
+            if (!chart) {
+                chart = new Chart(document.getElementById('chart').getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: ['Área'],
+                        datasets: [{
+                            label: finca.Finca,
+                            data: [finca.Hectareas],
+                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            } else {
+                chart.data.datasets[0].data = [finca.Hectareas];
+                chart.update();
+            }
         }
 
         function exportarDatos() {
-            if (datosFincaSeleccionada.length === 0) {
-                alert("Por favor, seleccione una finca primero.");
-                return;
-            }
-
-            const ws = XLSX.utils.json_to_sheet(datosFincaSeleccionada);
             const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.json_to_sheet(datosFincaSeleccionada);
             XLSX.utils.book_append_sheet(wb, ws, "Datos Finca");
-            XLSX.writeFile(wb, "Datos_Finca_Seleccionada.xlsx");
+            XLSX.writeFile(wb, "datos_finca.xlsx");
         }
 
         cargarBosques();
@@ -335,3 +297,4 @@
     </script>
 </body>
 </html>
+
