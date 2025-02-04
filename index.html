@@ -1,135 +1,117 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <!-- METADATOS Y HOJAS DE ESTILO EXISTENTES -->
+    <!-- ... (mantener metadatos y hojas de estilo anteriores) ... -->
     <style>
         /* ... (estilos anteriores) ... */
-        
-        /* Spinner de carga */
-        .loader {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #3498db;
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            animation: spin 1s linear infinite;
-            display: none;
-        }
 
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        /* Leyenda */
+        /* Mejorar leyenda */
         .legend {
-            background: white;
-            padding: 10px;
-            border-radius: 5px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            line-height: 1.5;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            max-width: 200px;
+            font-size: 0.9em;
         }
-        .legend-item {
-            display: flex;
-            align-items: center;
-            margin: 5px 0;
-        }
-        .legend-color {
-            width: 20px;
-            height: 20px;
-            margin-right: 8px;
-            border: 1px solid #666;
+        .legend h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 1.1em;
         }
     </style>
 </head>
 <body>
-    <!-- ESTRUCTURA HTML EXISTENTE -->
-    <div class="loader"></div> <!-- Nuevo spinner -->
+    <!-- ... (estructura HTML existente) ... -->
 
     <script>
-        // FUNCIONALIDAD MEJORADA
-        
-        // ========== MANEJO DE CARGA ==========
-        function showLoader(show) {
-            document.querySelector('.loader').style.display = show ? 'block' : 'none';
+        // Paleta de colores mejorada para cultivos
+        const colorMap = {
+            // Cultivos básicos
+            'arroz': '#FFD700',
+            'maíz': '#FFA500',
+            'trigo': '#D2B48C',
+            
+            // Frutales
+            'banano': '#32CD32',
+            'plátano': '#228B22',
+            'papaya': '#FF6347',
+            
+            // Cultivos industriales
+            'café': '#8B4513',
+            'cacao': '#A0522D',
+            'palma aceite': '#CD853F',
+            
+            // Pastos
+            'pasto limpio': '#7CFC00',
+            'pasto arbolado': '#2E8B57',
+            'pasto enmalezado': '#ADFF2F',
+            
+            // Default y otros
+            'bosque de galería': '#2c6b23',
+            'otros': '#A9A9A9'
+        };
+
+        // Función para obtener color único por cultivo
+        function getCultivoColor(cultivoNombre) {
+            const cultivo = cultivoNombre.toLowerCase().trim();
+            return colorMap[cultivo] || generateUniqueColor(cultivo);
         }
 
-        // ========== VALIDACIÓN AL DIBUJAR ==========
-        function handleDrawValidation(layer, layerType) {
-            let name = prompt(`Nombre del ${layerType === 'marker' ? 'cultivo' : 'finca'}:`);
-            
-            while (!name || name.trim() === '') {
-                alert('El nombre no puede estar vacío');
-                name = prompt(`Nombre del ${layerType}:`);
-            }
-            
-            layer.feature = {
-                type: 'Feature',
-                properties: {
-                    type: layerType === 'marker' ? 'Cultivo' : 'Finca',
-                    name: name.trim()
-                },
-                geometry: {}
-            };
-            
-            return layer;
+        // Generar color único para cultivos no listados
+        function generateUniqueColor(seed) {
+            const hash = Array.from(seed).reduce((acc, char) => char.charCodeAt(0) + (acc << 6) + (acc << 16) - acc, 0);
+            const hue = Math.abs(hash % 360);
+            return `hsl(${hue}, 70%, 50%)`;
         }
 
-        // ========== LEYENDA INTERACTIVA ==========
-        function addLegend() {
+        // Modificar la capa de cultivos
+        function cargarCultivos() {
+            fetch("cultivos.geojson")
+                .then(response => response.json())
+                .then(data => {
+                    cultivosLayer = L.geoJSON(data, {
+                        style: feature => ({
+                            color: '#fff',
+                            weight: 1,
+                            fillColor: getCultivoColor(feature.properties.cultivo),
+                            fillOpacity: 0.7
+                        }),
+                        onEachFeature: (feature, layer) => {
+                            // ... (mantener popup y lógica existente) ...
+                        }
+                    });
+                    
+                    // Actualizar leyenda con todos los cultivos encontrados
+                    updateLegend(data);
+                });
+        }
+
+        // Leyenda dinámica
+        function updateLegend(geojsonData) {
+            const cultivosUnicos = [...new Set(geojsonData.features.map(f => f.properties.cultivo))];
+            
             const legend = L.control({ position: 'bottomright' });
-            
             legend.onAdd = () => {
                 const div = L.DomUtil.create('div', 'legend');
-                div.innerHTML = '<strong>Leyenda de Cultivos</strong>';
+                div.innerHTML = '<h4>Leyenda de Cultivos</h4>';
                 
-                Object.entries(colorMap).forEach(([cultivo, color]) => {
-                    const item = document.createElement('div');
-                    item.className = 'legend-item';
-                    item.innerHTML = `
-                        <div class="legend-color" style="background:${color}"></div>
-                        <span>${cultivo}</span>
+                cultivosUnicos.forEach(cultivo => {
+                    const color = getCultivoColor(cultivo);
+                    div.innerHTML += `
+                        <div class="legend-item">
+                            <div class="legend-color" style="background:${color}"></div>
+                            <span>${cultivo}</span>
+                        </div>
                     `;
-                    div.appendChild(item);
                 });
                 
                 return div;
             };
             
-            legend.addTo(map);
+            if (map.legend) map.removeControl(map.legend);
+            map.legend = legend.addTo(map);
         }
-
-        // ========== CARGA SEGURA DE CAPAS ==========
-        async function cargarCultivos() {
-            showLoader(true);
-            
-            try {
-                const response = await fetch("cultivos.geojson");
-                if (!response.ok) throw new Error('Error en la red');
-                
-                const data = await response.json();
-                // ... (código existente de cultivosLayer) ...
-                
-                addLegend(); // Añadir leyenda después de cargar
-            } catch (error) {
-                alert(`Error al cargar cultivos: ${error.message}`);
-            } finally {
-                showLoader(false);
-            }
-        }
-
-        // ========== MODIFICACIÓN EN EL DIBUJADO ==========
-        map.on(L.Draw.Event.CREATED, function (e) {
-            const layer = e.layer;
-            const layerType = e.layerType;
-            
-            const validatedLayer = handleDrawValidation(layer, layerType);
-            if (validatedLayer) drawnItems.addLayer(validatedLayer);
-        });
 
         // ... (resto del código existente) ...
     </script>
