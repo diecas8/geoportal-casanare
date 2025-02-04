@@ -1,335 +1,119 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GeoPortal Agrícola | Monitorización de Cultivos</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
+    <!-- ... (mantener metadatos y hojas de estilo anteriores) ... -->
     <style>
-        :root {
-            --primary-color: #2c5f2d;
-            --secondary-color: #97bc62;
-            --accent-color: #f0f4ef;
-            --text-dark: #2d3436;
-            --text-light: #f5f6fa;
-        }
+        /* ... (estilos anteriores) ... */
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', system-ui, sans-serif;
-        }
-
-        body {
-            display: flex;
-            height: 100vh;
-            background: var(--accent-color);
-        }
-
-        /* Barra de navegación superior */
-        .nav-bar {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 60px;
-            background: var(--primary-color);
-            display: flex;
-            align-items: center;
-            padding: 0 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            z-index: 1000;
-        }
-
-        .nav-brand {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            color: var(--text-light);
-        }
-
-        .nav-brand img {
-            height: 40px;
-        }
-
-        /* Panel lateral mejorado */
-        .sidebar {
-            width: 380px;
-            height: 100%;
-            background: var(--text-light);
-            padding: 70px 20px 20px;
-            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
-            overflow-y: auto;
-            transition: transform 0.3s;
-        }
-
-        .sidebar.collapsed {
-            transform: translateX(-100%);
-        }
-
-        .settings-panel {
-            margin: 20px 0;
+        /* Mejorar leyenda */
+        .legend {
+            background: rgba(255, 255, 255, 0.9);
             padding: 15px;
-            background: var(--accent-color);
             border-radius: 8px;
-        }
-
-        .layer-control {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin: 10px 0;
-        }
-
-        /* Mapa mejorado */
-        #map {
-            flex: 1;
-            height: 100%;
-            margin-top: 60px;
-        }
-
-        /* Componentes de UI */
-        .card {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-
-        .card h3 {
-            color: var(--primary-color);
-            margin-bottom: 15px;
-            font-size: 1.1em;
-        }
-
-        .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: all 0.3s;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .btn-primary {
-            background: var(--primary-color);
-            color: var(--text-light);
-        }
-
-        .btn-primary:hover {
-            background: #1e401f;
-        }
-
-        .chart-container {
-            height: 300px;
-            position: relative;
-        }
-
-        /* Coordenadas en tiempo real */
-        .coordinate-display {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: rgba(255,255,255,0.9);
-            padding: 8px 15px;
-            border-radius: 5px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            max-width: 200px;
             font-size: 0.9em;
-            z-index: 500;
         }
-
-        @media (max-width: 768px) {
-            .sidebar {
-                position: fixed;
-                width: 100%;
-                z-index: 900;
-            }
-            
-            #map {
-                margin-left: 0;
-            }
+        .legend h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 1.1em;
         }
     </style>
 </head>
 <body>
-    <nav class="nav-bar">
-        <div class="nav-brand">
-            <img src="logo-agro.png" alt="Logo">
-            <h1>GeoPortal Agrícola</h1>
-        </div>
-    </nav>
-
-    <div class="sidebar">
-        <div class="settings-panel">
-            <h3><i class="fas fa-sliders-h"></i> Configuración de Capas</h3>
-            <div class="layer-control">
-                <input type="checkbox" id="cultivos-layer" checked>
-                <label for="cultivos-layer">Cultivos</label>
-            </div>
-            <div class="layer-control">
-                <input type="checkbox" id="fincas-layer" checked>
-                <label for="fincas-layer">Límites de Fincas</label>
-            </div>
-        </div>
-
-        <div class="card">
-            <h3><i class="fas fa-filter"></i> Filtros</h3>
-            <div class="filter">
-                <label for="codigoFinca">Seleccionar Finca:</label>
-                <select id="codigoFinca" class="btn" onchange="filtrarPorFinca()">
-                    <option value="">Todas las fincas</option>
-                </select>
-            </div>
-        </div>
-
-        <div class="card">
-            <h3><i class="fas fa-chart-pie"></i> Distribución de Cultivos</h3>
-            <div class="chart-container">
-                <canvas id="chart"></canvas>
-            </div>
-        </div>
-
-        <div class="card">
-            <h3><i class="fas fa-download"></i> Exportar Datos</h3>
-            <button class="btn btn-primary" onclick="exportarDatos()">
-                <i class="fas fa-file-excel"></i> Exportar a Excel
-            </button>
-            <button class="btn btn-primary" onclick="exportarGeoJSON()" style="margin-top: 10px;">
-                <i class="fas fa-download"></i> Descargar GeoJSON
-            </button>
-        </div>
-    </div>
-
-    <div id="map"></div>
-    <div class="coordinate-display" id="coordinates"></div>
+    <!-- ... (estructura HTML existente) ... -->
 
     <script>
-        // Configuración inicial del mapa
-        const map = L.map('map').setView([4.6097, -74.0817], 6);
-        
-        // Capas base profesionales
-        const baseMaps = {
-            "OpenStreetMap": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors',
-                maxZoom: 19
-            }),
-            "Satélite (ESRI)": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                attribution: '© Esri',
-                maxZoom: 19
-            }),
-            "Topográfico": L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenTopoMap',
-                maxZoom: 17
-            })
-        };
-
-        // Control de capas mejorado
-        const layerControl = L.control.layers(baseMaps, {}, {
-            position: 'topright',
-            collapsed: false
-        }).addTo(map);
-
-        baseMaps["OpenStreetMap"].addTo(map);
-
-        // Control de coordenadas en tiempo real
-        map.on('mousemove', function(e) {
-            document.getElementById('coordinates').innerHTML = 
-                `Lat: ${e.latlng.lat.toFixed(4)}, Lng: ${e.latlng.lng.toFixed(4)}`;
-        });
-
-        // Sistema de capas optimizado
-        const layerManager = {
-            cultivos: null,
-            fincas: null,
-            bosques: null,
+        // Paleta de colores mejorada para cultivos
+        const colorMap = {
+            // Cultivos básicos
+            'arroz': '#FFD700',
+            'maíz': '#FFA500',
+            'trigo': '#D2B48C',
             
-            init: async function() {
-                await this.loadCultivos();
-                await this.loadFincas();
-                await this.loadBosques();
-                this.setupLayerControls();
-            },
-
-            loadCultivos: async function() {
-                return new Promise((resolve) => {
-                    fetch("cultivos.geojson")
-                        .then(response => response.json())
-                        .then(data => {
-                            this.cultivos = L.geoJSON(data, {
-                                style: feature => ({
-                                    fillColor: getCultivoColor(feature.properties.cultivo),
-                                    weight: 1,
-                                    opacity: 1,
-                                    color: '#ffffff',
-                                    fillOpacity: 0.7
-                                }),
-                                onEachFeature: (feature, layer) => {
-                                    layer.bindPopup(this.createPopupContent(feature));
-                                }
-                            });
-                            layerControl.addOverlay(this.cultivos, "Cultivos");
-                            resolve();
-                        });
-                });
-            },
-
-            createPopupContent: function(feature) {
-                return `
-                    <div class="popup-content">
-                        <h4>${feature.properties.cultivo}</h4>
-                        <p><strong>Finca:</strong> ${feature.properties.nom_finca_}</p>
-                        <p><strong>Área:</strong> ${parseFloat(feature.properties.has).toFixed(2)} ha</p>
-                        <p><strong>Tipo:</strong> ${feature.properties.tipo_cultivo || 'N/A'}</p>
-                    </div>
-                `;
-            },
-
-            // ... funciones similares para fincas y bosques ...
+            // Frutales
+            'banano': '#32CD32',
+            'plátano': '#228B22',
+            'papaya': '#FF6347',
+            
+            // Cultivos industriales
+            'café': '#8B4513',
+            'cacao': '#A0522D',
+            'palma aceite': '#CD853F',
+            
+            // Pastos
+            'pasto limpio': '#7CFC00',
+            'pasto arbolado': '#2E8B57',
+            'pasto enmalezado': '#ADFF2F',
+            
+            // Default y otros
+            'bosque de galería': '#2c6b23',
+            'otros': '#A9A9A9'
         };
 
-        // Inicialización del sistema
-        document.addEventListener('DOMContentLoaded', async () => {
-            await layerManager.init();
-            initChart();
-            setupEventListeners();
-        });
-
-        // Sistema de gráficos profesional
-        let chart;
-        function initChart() {
-            const ctx = document.getElementById('chart').getContext('2d');
-            chart = new Chart(ctx, {
-                type: 'doughnut',
-                data: { datasets: [{}] },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'bottom' },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return `${context.label}: ${context.parsed} ha`;
-                                }
-                            }
-                        }
-                    }
-                }
-            });
+        // Función para obtener color único por cultivo
+        function getCultivoColor(cultivoNombre) {
+            const cultivo = cultivoNombre.toLowerCase().trim();
+            return colorMap[cultivo] || generateUniqueColor(cultivo);
         }
 
-        // ... resto de funcionalidades (exportación, filtrado, etc) ...
+        // Generar color único para cultivos no listados
+        function generateUniqueColor(seed) {
+            const hash = Array.from(seed).reduce((acc, char) => char.charCodeAt(0) + (acc << 6) + (acc << 16) - acc, 0);
+            const hue = Math.abs(hash % 360);
+            return `hsl(${hue}, 70%, 50%)`;
+        }
+
+        // Modificar la capa de cultivos
+        function cargarCultivos() {
+            fetch("cultivos.geojson")
+                .then(response => response.json())
+                .then(data => {
+                    cultivosLayer = L.geoJSON(data, {
+                        style: feature => ({
+                            color: '#fff',
+                            weight: 1,
+                            fillColor: getCultivoColor(feature.properties.cultivo),
+                            fillOpacity: 0.7
+                        }),
+                        onEachFeature: (feature, layer) => {
+                            // ... (mantener popup y lógica existente) ...
+                        }
+                    });
+                    
+                    // Actualizar leyenda con todos los cultivos encontrados
+                    updateLegend(data);
+                });
+        }
+
+        // Leyenda dinámica
+        function updateLegend(geojsonData) {
+            const cultivosUnicos = [...new Set(geojsonData.features.map(f => f.properties.cultivo))];
+            
+            const legend = L.control({ position: 'bottomright' });
+            legend.onAdd = () => {
+                const div = L.DomUtil.create('div', 'legend');
+                div.innerHTML = '<h4>Leyenda de Cultivos</h4>';
+                
+                cultivosUnicos.forEach(cultivo => {
+                    const color = getCultivoColor(cultivo);
+                    div.innerHTML += `
+                        <div class="legend-item">
+                            <div class="legend-color" style="background:${color}"></div>
+                            <span>${cultivo}</span>
+                        </div>
+                    `;
+                });
+                
+                return div;
+            };
+            
+            if (map.legend) map.removeControl(map.legend);
+            map.legend = legend.addTo(map);
+        }
+
+        // ... (resto del código existente) ...
     </script>
 </body>
 </html>
