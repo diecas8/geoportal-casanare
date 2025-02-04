@@ -3,127 +3,113 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Geoportal Mejorado</title>
+    <title>Geoportal Funcional</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
-    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <style>
-        /* ... (mantener todos los estilos anteriores) ... */
-        
-        /* Nuevos estilos para buscador */
-        .select2-container--default .select2-selection--single {
-            border: 1px solid #ddd !important;
-            border-radius: 4px !important;
-            height: 34px !important;
-        }
-        .select2-container--default .select2-selection__arrow {
-            height: 32px !important;
-        }
+        body { margin: 0; padding: 0; display: flex; height: 100vh; }
+        #map { flex: 1; }
+        .sidebar { width: 300px; padding: 20px; background: #fff; box-shadow: 2px 0 5px rgba(0,0,0,0.1); overflow-y: auto; }
     </style>
 </head>
 <body>
     <div class="sidebar">
-        <img src="CBS.png" alt="Logo" class="logo">
         <div class="filter">
-            <label for="buscadorFincas"><strong>Buscar Finca</strong></label>
-            <select id="buscadorFincas" class="form-control"></select>
+            <label><strong>Buscar Finca:</strong></label>
+            <input type="text" id="buscador" placeholder="Escribe aquí...">
         </div>
-        <!-- ... (mantener resto del sidebar) ... -->
+        <div id="leyenda"></div>
     </div>
     <div id="map"></div>
-    <div class="loader"></div>
 
+    <!-- Dependencias -->
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-geometryutil/0.9.3/leaflet.geometryutil.min.js"></script>
-
     <script>
-        // Configuración inicial del mapa (mantener igual)
-        const map = L.map('map').setView([5.5, -73.0], 6);
+        // 1. Inicialización del Mapa
+        const map = L.map('map').setView([4.6097, -74.0817], 6); // Coordenadas de Colombia
         
-        // Capas base (mantener igual)
-        const baseMaps = { /* ... */ };
+        // Capa base
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
 
-        // Mejora: Control de dibujo con cálculo de área
-        const drawControl = new L.Control.Draw({
-            edit: { featureGroup: drawnItems },
-            draw: {
-                polygon: {
-                    shapeOptions: { color: '#3388ff' },
-                    showArea: true,
-                    metric: true
-                },
-                // ... (resto de configuraciones de dibujo)
-            }
-        });
+        // 2. Capa de Cultivos con Estilos
+        const colorMap = {
+            'café': '#8B4513',
+            'banano': '#32CD32',
+            'arroz': '#FFD700',
+            'maíz': '#FFA500',
+            'otros': '#CCCCCC'
+        };
 
-        // Mejora: Mostrar área durante el dibujo
-        map.on(L.Draw.Event.DRAWVERTEX, (e) => {
-            const layer = e.layer;
-            if (layer instanceof L.Polygon) {
-                const area = L.GeometryUtil.geodesicArea(layer.getLatLngs()[0]);
-                layer.bindTooltip(`Área actual: ${(area / 10000).toFixed(2)} ha`, {
-                    permanent: true, 
-                    direction: 'center'
-                }).openTooltip();
-            }
-        });
+        let cultivosLayer;
+        fetch('cultivos.geojson')
+            .then(response => response.json())
+            .then(data => {
+                cultivosLayer = L.geoJSON(data, {
+                    style: feature => ({
+                        fillColor: colorMap[feature.properties.cultivo] || '#CCCCCC',
+                        weight: 1,
+                        fillOpacity: 0.7
+                    }),
+                    onEachFeature: (feature, layer) => {
+                        layer.bindPopup(`
+                            <b>${feature.properties.cultivo}</b><br>
+                            Área: ${feature.properties.area} ha
+                        `);
+                    }
+                }).addTo(map);
+                
+                crearLeyenda();
+            })
+            .catch(error => console.error('Error cargando cultivos:', error));
 
-        // Mejora: Búsqueda con autocompletado
-        $(document).ready(function() {
-            $('#buscadorFincas').select2({
-                placeholder: "Escribe para buscar...",
-                allowClear: true,
-                data: datosFincas.map(f => ({
-                    id: f.Codigo,
-                    text: `${f.Codigo} - ${f.Finca}`
-                }))
-            }).on('change', function() {
-                document.getElementById('codigoFinca').value = this.value;
-                filtrarPorFinca();
+        // 3. Sistema de Búsqueda Básico
+        document.getElementById('buscador').addEventListener('input', function(e) {
+            const valor = e.target.value.toLowerCase();
+            cultivosLayer.eachLayer(layer => {
+                const nombre = layer.feature.properties.cultivo.toLowerCase();
+                layer.setStyle({ fillOpacity: nombre.includes(valor) ? 0.7 : 0.2 });
             });
         });
 
-        // Función mejorada de filtrado
-        function filtrarPorFinca() {
-            const codigoFinca = document.getElementById('codigoFinca').value;
-            // ... (código existente de filtrado)
+        // 4. Leyenda Interactiva
+        function crearLeyenda() {
+            const leyenda = document.getElementById('leyenda');
+            leyenda.innerHTML = '<h3>Leyenda de Cultivos</h3>';
             
-            // Mejora: Actualizar buscador Select2
-            if (codigoFinca) {
-                $('#buscadorFincas').val(codigoFinca).trigger('change');
-            }
-        }
-
-        // ... (mantener resto de funciones existentes: cargarBosques, cargarCultivos, etc)
-        
-        // Función mejorada de leyenda dinámica
-        function updateLegend(geojsonData) {
-            // ... (código de leyenda existente mejorado)
-            // Agregar elemento de área promedio
-            div.innerHTML += `<hr><div><strong>Área promedio:</strong> ${calcularAreaPromedio()} ha</div>`;
-        }
-
-        // Nueva función: Cálculo de área promedio
-        function calcularAreaPromedio() {
-            const areas = datosFincaSeleccionada.map(f => parseFloat(f.Hectareas));
-            return (areas.reduce((a, b) => a + b, 0) / areas.length).toFixed(2);
-        }
-
-        // Inicialización mejorada
-        function init() {
-            cargarBosques();
-            cargarCultivos().then(() => {
-                $('#buscadorFincas').trigger('change'); // Inicializar Select2
+            Object.entries(colorMap).forEach(([cultivo, color]) => {
+                leyenda.innerHTML += `
+                    <div style="margin: 5px 0; display: flex; align-items: center;">
+                        <div style="width: 20px; height: 20px; background: ${color}; margin-right: 10px;"></div>
+                        ${cultivo}
+                    </div>
+                `;
             });
-            cargarFincas();
         }
 
-        init();
+        // 5. Control de Dibujo Básico
+        const drawnItems = new L.FeatureGroup().addTo(map);
+        
+        const drawControl = new L.Control.Draw({
+            draw: {
+                polygon: true,
+                rectangle: false,
+                circle: false,
+                marker: false
+            },
+            edit: {
+                featureGroup: drawnItems
+            }
+        });
+        map.addControl(drawControl);
+
+        map.on(L.Draw.Event.CREATED, function(e) {
+            const layer = e.layer;
+            layer.bindPopup('Área dibujada: ' + L.GeometryUtil.geodesicArea(layer.getLatLngs()[0])/10000 + ' ha');
+            drawnItems.addLayer(layer);
+        });
     </script>
 </body>
 </html>
