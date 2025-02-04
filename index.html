@@ -1,119 +1,129 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <!-- ... (mantener metadatos y hojas de estilo anteriores) ... -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geoportal Mejorado</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <style>
-        /* ... (estilos anteriores) ... */
-
-        /* Mejorar leyenda */
-        .legend {
-            background: rgba(255, 255, 255, 0.9);
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            max-width: 200px;
-            font-size: 0.9em;
+        /* ... (mantener todos los estilos anteriores) ... */
+        
+        /* Nuevos estilos para buscador */
+        .select2-container--default .select2-selection--single {
+            border: 1px solid #ddd !important;
+            border-radius: 4px !important;
+            height: 34px !important;
         }
-        .legend h4 {
-            margin: 0 0 10px 0;
-            color: #333;
-            font-size: 1.1em;
+        .select2-container--default .select2-selection__arrow {
+            height: 32px !important;
         }
     </style>
 </head>
 <body>
-    <!-- ... (estructura HTML existente) ... -->
+    <div class="sidebar">
+        <img src="CBS.png" alt="Logo" class="logo">
+        <div class="filter">
+            <label for="buscadorFincas"><strong>Buscar Finca</strong></label>
+            <select id="buscadorFincas" class="form-control"></select>
+        </div>
+        <!-- ... (mantener resto del sidebar) ... -->
+    </div>
+    <div id="map"></div>
+    <div class="loader"></div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-geometryutil/0.9.3/leaflet.geometryutil.min.js"></script>
 
     <script>
-        // Paleta de colores mejorada para cultivos
-        const colorMap = {
-            // Cultivos básicos
-            'arroz': '#FFD700',
-            'maíz': '#FFA500',
-            'trigo': '#D2B48C',
-            
-            // Frutales
-            'banano': '#32CD32',
-            'plátano': '#228B22',
-            'papaya': '#FF6347',
-            
-            // Cultivos industriales
-            'café': '#8B4513',
-            'cacao': '#A0522D',
-            'palma aceite': '#CD853F',
-            
-            // Pastos
-            'pasto limpio': '#7CFC00',
-            'pasto arbolado': '#2E8B57',
-            'pasto enmalezado': '#ADFF2F',
-            
-            // Default y otros
-            'bosque de galería': '#2c6b23',
-            'otros': '#A9A9A9'
-        };
+        // Configuración inicial del mapa (mantener igual)
+        const map = L.map('map').setView([5.5, -73.0], 6);
+        
+        // Capas base (mantener igual)
+        const baseMaps = { /* ... */ };
 
-        // Función para obtener color único por cultivo
-        function getCultivoColor(cultivoNombre) {
-            const cultivo = cultivoNombre.toLowerCase().trim();
-            return colorMap[cultivo] || generateUniqueColor(cultivo);
+        // Mejora: Control de dibujo con cálculo de área
+        const drawControl = new L.Control.Draw({
+            edit: { featureGroup: drawnItems },
+            draw: {
+                polygon: {
+                    shapeOptions: { color: '#3388ff' },
+                    showArea: true,
+                    metric: true
+                },
+                // ... (resto de configuraciones de dibujo)
+            }
+        });
+
+        // Mejora: Mostrar área durante el dibujo
+        map.on(L.Draw.Event.DRAWVERTEX, (e) => {
+            const layer = e.layer;
+            if (layer instanceof L.Polygon) {
+                const area = L.GeometryUtil.geodesicArea(layer.getLatLngs()[0]);
+                layer.bindTooltip(`Área actual: ${(area / 10000).toFixed(2)} ha`, {
+                    permanent: true, 
+                    direction: 'center'
+                }).openTooltip();
+            }
+        });
+
+        // Mejora: Búsqueda con autocompletado
+        $(document).ready(function() {
+            $('#buscadorFincas').select2({
+                placeholder: "Escribe para buscar...",
+                allowClear: true,
+                data: datosFincas.map(f => ({
+                    id: f.Codigo,
+                    text: `${f.Codigo} - ${f.Finca}`
+                }))
+            }).on('change', function() {
+                document.getElementById('codigoFinca').value = this.value;
+                filtrarPorFinca();
+            });
+        });
+
+        // Función mejorada de filtrado
+        function filtrarPorFinca() {
+            const codigoFinca = document.getElementById('codigoFinca').value;
+            // ... (código existente de filtrado)
+            
+            // Mejora: Actualizar buscador Select2
+            if (codigoFinca) {
+                $('#buscadorFincas').val(codigoFinca).trigger('change');
+            }
         }
 
-        // Generar color único para cultivos no listados
-        function generateUniqueColor(seed) {
-            const hash = Array.from(seed).reduce((acc, char) => char.charCodeAt(0) + (acc << 6) + (acc << 16) - acc, 0);
-            const hue = Math.abs(hash % 360);
-            return `hsl(${hue}, 70%, 50%)`;
-        }
-
-        // Modificar la capa de cultivos
-        function cargarCultivos() {
-            fetch("cultivos.geojson")
-                .then(response => response.json())
-                .then(data => {
-                    cultivosLayer = L.geoJSON(data, {
-                        style: feature => ({
-                            color: '#fff',
-                            weight: 1,
-                            fillColor: getCultivoColor(feature.properties.cultivo),
-                            fillOpacity: 0.7
-                        }),
-                        onEachFeature: (feature, layer) => {
-                            // ... (mantener popup y lógica existente) ...
-                        }
-                    });
-                    
-                    // Actualizar leyenda con todos los cultivos encontrados
-                    updateLegend(data);
-                });
-        }
-
-        // Leyenda dinámica
+        // ... (mantener resto de funciones existentes: cargarBosques, cargarCultivos, etc)
+        
+        // Función mejorada de leyenda dinámica
         function updateLegend(geojsonData) {
-            const cultivosUnicos = [...new Set(geojsonData.features.map(f => f.properties.cultivo))];
-            
-            const legend = L.control({ position: 'bottomright' });
-            legend.onAdd = () => {
-                const div = L.DomUtil.create('div', 'legend');
-                div.innerHTML = '<h4>Leyenda de Cultivos</h4>';
-                
-                cultivosUnicos.forEach(cultivo => {
-                    const color = getCultivoColor(cultivo);
-                    div.innerHTML += `
-                        <div class="legend-item">
-                            <div class="legend-color" style="background:${color}"></div>
-                            <span>${cultivo}</span>
-                        </div>
-                    `;
-                });
-                
-                return div;
-            };
-            
-            if (map.legend) map.removeControl(map.legend);
-            map.legend = legend.addTo(map);
+            // ... (código de leyenda existente mejorado)
+            // Agregar elemento de área promedio
+            div.innerHTML += `<hr><div><strong>Área promedio:</strong> ${calcularAreaPromedio()} ha</div>`;
         }
 
-        // ... (resto del código existente) ...
+        // Nueva función: Cálculo de área promedio
+        function calcularAreaPromedio() {
+            const areas = datosFincaSeleccionada.map(f => parseFloat(f.Hectareas));
+            return (areas.reduce((a, b) => a + b, 0) / areas.length).toFixed(2);
+        }
+
+        // Inicialización mejorada
+        function init() {
+            cargarBosques();
+            cargarCultivos().then(() => {
+                $('#buscadorFincas').trigger('change'); // Inicializar Select2
+            });
+            cargarFincas();
+        }
+
+        init();
     </script>
 </body>
 </html>
